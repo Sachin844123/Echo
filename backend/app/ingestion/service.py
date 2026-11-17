@@ -1,0 +1,285 @@
+"""Durable single-worker ingestion with atomic publication and crash recovery."""
+
+import io
+import json
+import logging
+import os
+import subprocess
+import sys
+import threading
+from pathlib import Path
+
+from sqlalchemy import Engine, delete, func, select
+
+from app.core.config import REPO_ROOT, Settings
+from app.database.engine import create_session_factory
+from app.database.models import Chunk, Document, IndexingJob, Source
+from app.ingestion.errors import ERRORS, ImportFailure
+from app.processing.chunking import iter_chunks, read_segments
+from app.security.file_validation import MIMES, detect_file, safe_filename
+from app.storage.files import FileStore
+from app.storage.instance_lock import InstanceLock
+
+logger = logging.getLogger("echo.ingestion")
+
+
+class IngestionService:
+    def __init__(self, engine: Engine, settings: Settings):
+        self.settings = settings
+        self.sessions = create_session_factory(engine)
+        self.store = FileStore(settings.data_dir)
+        self.instance_lock = InstanceLock(settings.data_dir / "ingestion.lock")
+        self.mutation_lock = threading.RLock()
+        self.process_lock = threading.Lock()
+        self.stopping = threading.Event()
+        self.wake = threading.Event()
+        self.process: subprocess.Popen | None = None
+        self.thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self.instance_lock.acquire()
+        try:
+            self.store.prepare()
+            self.recover()
+            self.thread = threading.Thread(target=self._loop, name="echo-ingestion", daemon=True)
+            self.thread.start()
+        except Exception:
+            self.instance_lock.release()
+            raise
+
+    def stop(self) -> None:
+        self.stopping.set()
+        self.wake.set()
+        with self.process_lock:
+            if self.process is not None and self.process.poll() is None:
+                self.process.terminate()
+        if self.thread is not None:
+            self.thread.join(timeout=15)
+            if self.thread.is_alive():
+                raise RuntimeError("ingestion worker did not stop")
+        self.instance_lock.release()
+
+    def recover(self) -> None:
+        """Called under the instance lock before the server accepts requests."""
+        with self.mutation_lock, self.sessions.begin() as session:
+            for job in session.scalars(select(IndexingJob).where(IndexingJob.status == "running")):
+                source = session.get(Source, job.source_id)
+                if job.attempts >= self.settings.max_job_attempts:
+                    job.status, job.error = "failed", "interrupted"
+                    source.processing_status = "failed"
+                else:
+                    job.status, job.error = "pending", None
+                    source.processing_status = "pending"
+            referenced = set(session.scalars(select(Source.file_path).where(Source.file_path.is_not(None))))
+        self.store.recover_orphans(referenced)
+        logger.info("jobs_recovered")
+
+    def enqueue(self, staged: Path, filename: str, digest: str, note_title: str | None = None) -> dict:
+        name = safe_filename(filename)
+        detected = detect_file(staged, name, self.settings)
+        source_type = "note" if note_title is not None else detected
+        adopted = None
+        try:
+            with self.mutation_lock, self.sessions.begin() as session:
+                duplicate = session.scalar(select(Source).where(Source.content_hash == digest))
+                if duplicate is not None:
+                    job = session.scalar(select(IndexingJob).where(IndexingJob.source_id == duplicate.id).order_by(IndexingJob.id.desc()).limit(1))
+                    return {"source_id": duplicate.id, "job_id": job.id if job else None, "duplicate": True}
+                pending = session.scalar(select(func.count()).select_from(IndexingJob).where(IndexingJob.status.in_(["pending", "running"])))
+                if pending >= self.settings.max_pending_jobs:
+                    raise ImportFailure("queue_full", 429)
+                adopted = self.store.adopt(staged, source_type)
+                source = Source(
+                    source_type=source_type, title=note_title or Path(name).stem,
+                    file_path=adopted, mime_type=MIMES[source_type], content_hash=digest,
+                )
+                session.add(source)
+                session.flush()
+                job = IndexingJob(source_id=source.id)
+                session.add(job)
+                session.flush()
+                response = {"source_id": source.id, "job_id": job.id, "duplicate": False}
+            # File publication precedes DB commit. A crash leaves an orphan removed at startup.
+            self.wake.set()
+            return response
+        except BaseException:
+            if adopted is not None:
+                self.store.remove(adopted)
+            raise
+        finally:
+            staged.unlink(missing_ok=True)
+
+    def job(self, job_id: int) -> dict:
+        with self.sessions() as session:
+            job = session.get(IndexingJob, job_id)
+            if job is None:
+                raise ImportFailure("not_found", 404)
+            source = session.get(Source, job.source_id)
+            error_code = job.error if job.error in ERRORS else "extraction_failed"
+            document = session.scalar(select(Document.id).where(Document.source_id == source.id))
+            chunk_count = session.scalar(select(func.count()).select_from(Chunk).join(Document).where(Document.source_id == source.id))
+            return {
+                "id": job.id, "source_id": source.id, "source_type": source.source_type,
+                "title": source.title, "status": job.status, "attempts": job.attempts,
+                "error": {"code": error_code, "message": ERRORS[error_code]} if job.error else None,
+                "created_at": job.created_at, "updated_at": job.updated_at,
+                "document_id": document, "chunk_count": chunk_count,
+                "ready_for_indexing": job.status == "succeeded",
+                "retryable": job.status == "failed" and job.attempts < self.settings.max_job_attempts,
+            }
+
+    def jobs(self, limit: int, offset: int) -> dict:
+        with self.sessions() as session:
+            ids = list(session.scalars(select(IndexingJob.id).order_by(IndexingJob.id.desc()).limit(limit).offset(offset)))
+            total = session.scalar(select(func.count()).select_from(IndexingJob))
+        return {"items": [self.job(job_id) for job_id in ids], "total": total,
+                "worker_alive": bool(self.thread and self.thread.is_alive())}
+
+    def retry(self, job_id: int) -> dict:
+        with self.mutation_lock, self.sessions.begin() as session:
+            job = session.get(IndexingJob, job_id)
+            if job is None:
+                raise ImportFailure("not_found", 404)
+            if job.status != "failed" or job.attempts >= self.settings.max_job_attempts:
+                raise ImportFailure("retry_conflict", 409)
+            pending = session.scalar(select(func.count()).select_from(IndexingJob).where(IndexingJob.status.in_(["pending", "running"])))
+            if pending >= self.settings.max_pending_jobs:
+                raise ImportFailure("queue_full", 429)
+            job.status, job.error = "pending", None
+            session.get(Source, job.source_id).processing_status = "pending"
+        self.wake.set()
+        return {"job_id": job_id, "status": "pending"}
+
+    def _claim(self) -> tuple[int, int] | None:
+        with self.mutation_lock, self.sessions.begin() as session:
+            job = session.scalar(select(IndexingJob).where(IndexingJob.status == "pending").order_by(IndexingJob.id).limit(1))
+            if job is None:
+                return None
+            if job.attempts >= self.settings.max_job_attempts:
+                job.status, job.error = "failed", "interrupted"
+                session.get(Source, job.source_id).processing_status = "failed"
+                return None
+            job.status, job.error = "running", None
+            job.attempts += 1
+            session.get(Source, job.source_id).processing_status = "processing"
+            return job.id, job.source_id
+
+    def _loop(self) -> None:
+        while not self.stopping.is_set():
+            try:
+                claimed = self._claim()
+                if claimed is not None:
+                    self._execute(*claimed)
+                    continue
+            except Exception:
+                # A failed DB write may leave a running record; startup will recover it.
+                logger.exception("worker_failed")
+            self.wake.wait(0.5)
+            self.wake.clear()
+
+    def _extract(self, source: Source, spool: Path) -> str:
+        if source.file_path is None:
+            raise ImportFailure("missing_file")
+        path = self.store.resolve(source.file_path)
+        request = {
+            "input": str(path), "output": str(spool), "source_type": source.source_type,
+            "content_hash": source.content_hash,
+            "limits": {name: getattr(self.settings, name) for name in (
+                "max_upload_bytes", "max_extracted_chars", "max_pdf_pages", "max_docx_expanded_bytes",
+            )},
+        }
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("ECHO_")}
+        environment["PYTHONUTF8"] = "1"
+        with self.process_lock:
+            if self.stopping.is_set():
+                raise ImportFailure("interrupted")
+            process = subprocess.Popen(
+                [sys.executable, "-m", "app.extraction.worker"], cwd=REPO_ROOT / "backend",
+                env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                text=True, encoding="utf-8",
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            self.process = process
+        try:
+            try:
+                output, _ = process.communicate(json.dumps(request), timeout=self.settings.extraction_timeout_seconds)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate(timeout=5)
+                raise ImportFailure("extraction_timeout") from None
+            try:
+                result = json.loads(output)
+            except (ValueError, TypeError):
+                raise ImportFailure("extraction_failed") from None
+            if process.returncode != 0 or "error" in result:
+                raise ImportFailure(result.get("error") if result.get("error") in ERRORS else "extraction_failed")
+            return result["method"]
+        finally:
+            with self.process_lock:
+                self.process = None
+
+    def _execute(self, job_id: int, source_id: int) -> None:
+        spool = self.store.new_stage("jsonl")
+        try:
+            with self.sessions() as session:
+                source = session.get(Source, source_id)
+                session.expunge(source)
+            method = self._extract(source, spool)
+            if self.stopping.is_set():
+                raise ImportFailure("interrupted")
+            self._publish(job_id, source_id, spool, method)
+            logger.info("job_succeeded", extra={"job_id": job_id, "source_id": source_id})
+        except ImportFailure as error:
+            self._failed(job_id, source_id, error.code)
+        except Exception:
+            logger.exception("job_failed", extra={"job_id": job_id, "source_id": source_id})
+            self._failed(job_id, source_id, "extraction_failed")
+        finally:
+            spool.unlink(missing_ok=True)
+
+    def _publish(self, job_id: int, source_id: int, spool: Path, method: str) -> None:
+        # The normalized schema has one TEXT field: one bounded final text allocation is
+        # unavoidable. Extraction and chunk insertion otherwise proceed incrementally.
+        text = io.StringIO()
+        for segment in read_segments(spool):
+            if text.tell():
+                text.write("\n\n")
+            text.write(segment.text)
+            if text.tell() > self.settings.max_extracted_chars:
+                raise ImportFailure("text_limit")
+        with self.mutation_lock, self.sessions.begin() as session:
+            session.execute(delete(Document).where(Document.source_id == source_id))
+            document = Document(
+                source_id=source_id, extracted_text=text.getvalue(), content_length=text.tell(),
+                extraction_method=method, extraction_status="complete", language=None,
+            )
+            session.add(document)
+            session.flush()
+            batch = []
+            for values in iter_chunks(read_segments(spool), self.settings.chunk_tokens, self.settings.chunk_overlap):
+                batch.append({"document_id": document.id, **values})
+                if len(batch) == 100:
+                    session.execute(Chunk.__table__.insert(), batch)
+                    batch.clear()
+            if batch:
+                session.execute(Chunk.__table__.insert(), batch)
+            # M2 prepares documents; search indexing has not happened.
+            source = session.get(Source, source_id)
+            source.processing_status, source.indexed_at = "pending", None
+            job = session.get(IndexingJob, job_id)
+            job.status, job.error = "succeeded", None
+
+    def _failed(self, job_id: int, source_id: int, code: str) -> None:
+        with self.mutation_lock, self.sessions.begin() as session:
+            job = session.get(IndexingJob, job_id)
+            source = session.get(Source, source_id)
+            if self.stopping.is_set() and job.attempts < self.settings.max_job_attempts:
+                job.status, job.error = "pending", None
+                source.processing_status = "pending"
+            else:
+                job.status, job.error = "failed", code
+                source.processing_status = "failed"
+                session.execute(delete(Document).where(Document.source_id == source_id))
+                session.add(Document(source_id=source_id, extracted_text="", content_length=0,
+                                     extraction_method="failed", extraction_status="failed"))
+        logger.warning("job_failed", extra={"job_id": job_id, "source_id": source_id})

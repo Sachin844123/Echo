@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8.3,<10
+# Starlette TestClient's HTTP transport; tests only, not a runtime network client.
+httpx>=0.28,<0.29

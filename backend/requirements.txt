@@ -1,0 +1,14 @@
+# M1 foundation and M2 extraction; retrieval packages arrive in M3.
+fastapi==0.141.1
+# Compatibility constraint: Starlette 1.x deprecates the HTTPX TestClient.
+starlette>=0.47.3,<1
+# Starlette 0.52 uses AnyIO's pre-4.13 BlockingPortal interface.
+anyio>=4.1,<4.13
+pydantic>=2.10,<3
+SQLAlchemy>=2.0.36,<2.1
+alembic>=1.14,<2
+# ASGI server required to run FastAPI. No optional standard extras.
+uvicorn>=0.34,<1
+# Requested M2 document parsers; no OCR or network loaders.
+PyMuPDF>=1.26.7,<2
+python-docx>=1.2,<2

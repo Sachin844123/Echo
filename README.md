@@ -1,197 +1,347 @@
 # ECHO
 
-ECHO is a local-first personal document memory and retrieval research project.
-It will search **only content the user explicitly imports**. It cannot recover
-uncaptured information or remember everything.
+**Local-first document memory and retrieval research.**
 
-The research question is whether hybrid keyword + semantic retrieval, with and
-without contextual reranking, recovers remembered content better than either
-retrieval method alone on a labelled dataset. Evaluation is the primary
-deliverable; no retrieval results or accuracy claims exist yet.
+ECHO is a software-only research project exploring how people can find documents
+by describing what they remember. It operates on content the user explicitly
+imports, with local storage and a local API.
 
-**Current scope: Milestone 2 ingestion.** The authenticated local API imports
-PDF, TXT, Markdown, DOCX and manual notes into durable background jobs. It
-validates files, extracts and cleans text, records metadata, and stores chunks.
-Search, embedding/FTS indexing, evaluation, deletion endpoints and a dashboard
-are not implemented yet. Successful ingestion means ready for future indexing.
+The current release implements secure ingestion and document preparation.
+Retrieval and comparative evaluation are the next stages of development.
+ECHO cannot recover information that was never captured.
 
-## Setup (Windows PowerShell)
+[Quick start](#quick-start) · [API](#api) · [Configuration](#configuration) ·
+[Research](#research) · [Roadmap](#roadmap) · [Documentation](#documentation)
 
-Requires Python 3.11+ with SQLite FTS5. This milestone is tested on Windows with
-Python 3.12.6 and SQLite 3.45.3; Python 3.11 is not yet tested. From the repository:
+## Project status
+
+**Version 0.2.0 · Foundation and ingestion complete · Search engine pending**
+
+| Available now | Planned |
+| --- | --- |
+| PDF, TXT, Markdown, DOCX and manual-note imports | Keyword, semantic and hybrid search |
+| Content validation and SHA-256 duplicate detection | SQLite FTS5 indexing and FAISS vectors |
+| Text extraction, cleaning and contextual metadata | Source filters, management and consistent deletion |
+| Overlapping chunks with exact text offsets | Labelled-dataset evaluation and contextual reranking |
+| Persistent jobs, retries and interrupted-job recovery | Local React dashboard |
+| Authenticated loopback API and structured logs | Full application hardening |
+
+A successful import means the document is **ready for indexing**. It does not
+mean the document is searchable. No retrieval accuracy or performance results
+have been reported.
+
+## Capabilities
+
+- **Explicit capture.** Import selected files or write a note; ECHO does not scan
+  folders, monitor browsing or retrieve external content.
+- **Validated inputs.** Inspect file contents, enforce size limits, reject unsafe
+  DOCX archives and keep user-supplied filenames out of storage paths.
+- **Document preparation.** Extract and normalize text while preserving PDF page
+  numbers, supported headings and exact chunk offsets.
+- **Recoverable processing.** Persist jobs in SQLite, isolate parsers in child
+  processes and publish documents and chunks atomically.
+- **Local operation.** Store application data locally and require a session token
+  on every API request. The current runtime makes no outbound network or AI API
+  calls and includes no telemetry integration.
+
+### Supported inputs
+
+| Format | Support | Notes |
+| --- | --- | --- |
+| PDF | Embedded text, page metadata | Password-protected and image-only PDFs are unsupported; OCR is not enabled |
+| TXT | UTF-8, optional UTF-8 BOM, BOM-marked UTF-16 | Legacy encodings and UTF-32 are rejected |
+| Markdown | Text and ATX heading metadata | Source markup is retained; headings inside fenced code are excluded |
+| DOCX | Body paragraphs, headings and tables, including nested tables | Ancillary content and complex layouts are not comprehensively extracted |
+| Manual note | Title and text supplied as JSON | Title up to 200 characters; text up to 100,000 characters |
+
+See the [ingestion specification](docs/ingestion.md) for extraction limits,
+normalization rules and recovery behavior.
+
+## Architecture
+
+The implemented ingestion pipeline is:
+
+```mermaid
+flowchart LR
+    A[Explicit file or note import] --> B[Validate and hash]
+    B --> C[Local file storage]
+    C --> D[Persistent SQLite job]
+    D --> E[Isolated parser process]
+    E --> F[Clean text and create chunks]
+    F --> G[Atomic database publication]
+    G --> H[Ready for future indexing]
+```
+
+The backend uses **Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic and
+SQLite**. PyMuPDF and python-docx provide document extraction. One coordinator
+processes ingestion jobs serially, starting one parser child at a time.
+
+FAISS, sentence-transformers and the React dashboard belong to later milestones
+and are not part of the current implementation.
+
+## Quick start
+
+### Requirements
+
+- Python **3.11+** with SQLite FTS5 support.
+- Windows is the primary development target; commands below use PowerShell.
+- Git to clone the repository and network access to install dependencies.
+
+The verified environment is **Windows, Python 3.12.6 and SQLite 3.45.3**.
+Python 3.11 and other operating systems have not yet been verified.
+
+### 1. Install
 
 ```powershell
-Set-Location C:\Projects\Echo
+git clone https://github.com/Sachin844123/Echo.git
+Set-Location Echo
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt -c backend\requirements-lock.txt
 ```
 
-The last file records the exact resolved M2 environment, including transitive
-dependencies. It is a version lock, not a hash-verified supply-chain lock.
-Package installation may need internet access. ECHO itself makes no outbound
-network or AI API calls and contains no telemetry integration. No model is
-downloaded in M1 or M2. The isolated virtual environment avoids unrelated global
-Python packages. Shell activation and execution-policy changes are unnecessary.
+The dependency lock records the resolved environment, including transitive
+versions; it is not a hash-verified supply-chain lock. Virtual-environment
+activation is optional. No embedding model is downloaded in the current release.
 
-## Run
+### 2. Initialize and start
+
+From the repository root:
 
 ```powershell
-Set-Location C:\Projects\Echo\backend
+Set-Location backend
 ..\.venv\Scripts\python.exe -m app migrate
 $env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
 ..\.venv\Scripts\python.exe -m app serve
 ```
 
-The supported launcher binds to `127.0.0.1:8000`, with one worker, no reload,
-no proxy-header trust, no access log, and no WebSocket transport. Stop with
-Ctrl+C. Generate a new token before each session. Restart the server to rotate
-an existing token; changing an environment variable does not change a running
-process. Clear your shell's copy after stopping:
+The API listens on **`http://127.0.0.1:8000`**. Stop it with **Ctrl+C**.
+Migrations are explicit and idempotent; startup rejects missing or outdated
+schemas. Stop the server and back up the data directory before future upgrades.
+
+The token is captured in the shell environment without being printed or saved
+to a file. Generate a fresh token for each session. Restart with a new token to
+rotate it, then clear the shell copy after stopping:
 
 ```powershell
 Remove-Item Env:ECHO_SESSION_TOKEN
 ```
 
-`GET http://127.0.0.1:8000/api/v1/health` requires
-`Authorization: Bearer <session-token>`. The token command produces 256 bits of
-randomness and is captured above without displaying or persisting the token.
-Give API clients the same token through private local input, never a query
-parameter. An ordinary browser address-bar request receives 401. Swagger,
-ReDoc and OpenAPI endpoints are disabled.
+## API
 
-A healthy authenticated request returns:
+Every API request requires:
+
+```http
+Authorization: Bearer <session-token>
+```
+
+Use a client terminal with the same `ECHO_SESSION_TOKEN` value as the server.
+Supply that value privately; never put it in a URL or a committed file.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | Check application and database availability |
+| `POST` | `/api/v1/imports/files?filename=<name>` | Import a file as the raw request body |
+| `POST` | `/api/v1/imports/notes` | Import a JSON note containing `title` and `text` |
+| `GET` | `/api/v1/indexing-jobs?limit=20&offset=0` | List jobs and coordinator liveness |
+| `GET` | `/api/v1/indexing-jobs/{id}` | Read status, attempts, errors and chunk count |
+| `POST` | `/api/v1/indexing-jobs/{id}/retry` | Retry an eligible failed job |
+
+### Check health
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:ECHO_SESSION_TOKEN" }
+Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/v1/health' -Headers $headers
+```
+
+A healthy response is:
 
 ```json
 {"status":"ok","version":"0.2.0","database":"ok"}
 ```
 
-Missing/invalid tokens return 401; disallowed origins or non-loopback clients
-return 403; invalid Host headers return 400. Database health failures return
-503. Startup refuses missing or outdated databases. Migration is explicit and
-idempotent; stop the server before applying migrations. Back up the data
-directory before future schema upgrades. Do not run schema downgrades on real
-data; the initial downgrade removes all tables.
+Opening the endpoint in a browser address bar without the token returns `401`.
+Swagger, ReDoc and public OpenAPI endpoints are disabled.
 
-## Import and inspect
+### Import a document
 
-All endpoints use the same session token. File imports use a raw request body,
-not multipart form data. With the server running and the same token set in your
-client PowerShell session:
+Replace the example path with a document you own:
 
 ```powershell
-$headers = @{ Authorization = "Bearer $env:ECHO_SESSION_TOKEN" }
+$file = Get-Item -LiteralPath 'C:\path\paper.pdf'
+$name = [uri]::EscapeDataString($file.Name)
 $job = Invoke-RestMethod -Method Post `
-  -Uri 'http://127.0.0.1:8000/api/v1/imports/files?filename=paper.pdf' `
-  -Headers $headers -ContentType 'application/octet-stream' -InFile 'C:\path\paper.pdf'
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/indexing-jobs/$($job.job_id)" -Headers $headers
+  -Uri "http://127.0.0.1:8000/api/v1/imports/files?filename=$name" `
+  -Headers $headers -ContentType 'application/octet-stream' -InFile $file.FullName
+
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/api/v1/indexing-jobs/$($job.job_id)" `
+  -Headers $headers
 ```
 
-Replace the path and filename with a document you own. Never put the token in
-the URL. For a manual note, POST JSON containing `title` and `text` to
-`/api/v1/imports/notes`. New imports return 202 with `source_id`, `job_id`, and
-`duplicate: false`. Identical captured bytes return 200 and the existing IDs.
-Poll the job until `succeeded` or `failed`. Failed jobs return a fixed error
-code/message and whether they can be retried.
+File uploads use a **raw body**, not multipart form data. A new import returns
+`202` with source/job IDs. Identical captured bytes return `200` with the existing
+IDs; the first capture's metadata is retained.
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /api/v1/imports/files?filename=<name>` | Stream a PDF/TXT/MD/Markdown/DOCX file |
-| `POST /api/v1/imports/notes` | Import a note; JSON title ≤200 and text ≤100,000 characters |
-| `GET /api/v1/indexing-jobs?limit=20&offset=0` | Paginated recent jobs and worker liveness |
-| `GET /api/v1/indexing-jobs/{id}` | Status, attempts, sanitized error and chunk count |
-| `POST /api/v1/indexing-jobs/{id}/retry` | Retry a failed job below the attempt limit |
+Poll the job until `succeeded` or `failed`. A successful job reports
+`ready_for_indexing`; a failed job exposes a fixed error code, a safe message
+and whether retry is permitted. Attempt and queue limits apply to retries.
 
-Inspect prepared chunks locally, with the server stopped or running:
+### Inspect chunks locally
+
+From the repository root:
 
 ```powershell
-Set-Location C:\Projects\Echo
 .\.venv\Scripts\python.exe scripts\inspect_chunks.py --source-id 1 --limit 20
-# Explicit private-content display, not an application log:
-.\.venv\Scripts\python.exe scripts\inspect_chunks.py --source-id 1 --show-text
 ```
 
-See `docs/ingestion.md` for file validation, recovery, chunking semantics,
-limitations and the distinction between ingestion and search indexing.
+Replace `1` with the returned source ID. Metadata is displayed by default.
+Add `--show-text` only when deliberately displaying private document text in
+your terminal; do not redirect that output into operational logs.
 
-## Test
+## Configuration
+
+Configuration is read from environment variables and validated at startup.
+`.env` files are not loaded automatically. Local application data defaults to
+`.local/` under the repository and is excluded from Git.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ECHO_DATA_DIR` | Repository `.local/` | Database and imported-file storage |
+| `ECHO_HOST` | `127.0.0.1` | Only this bind address is accepted |
+| `ECHO_PORT` | `8000` | Local port, from 1024 to 65535 |
+| `ECHO_SESSION_TOKEN` | Required to serve | Generated bearer token |
+| `ECHO_ALLOWED_ORIGINS` | `["http://127.0.0.1:<port>"]` | JSON array of exact loopback HTTP origins |
+| `ECHO_LOG_LEVEL` | `INFO` | `INFO`, `WARNING` or `ERROR` |
+| `ECHO_MAX_UPLOAD_BYTES` | `20971520` (20 MiB) | Per-file byte ceiling |
+| `ECHO_MAX_EXTRACTED_CHARS` | `5000000` | Cleaned-document character ceiling |
+| `ECHO_MAX_PDF_PAGES` | `2000` | PDF page ceiling |
+| `ECHO_MAX_DOCX_EXPANDED_BYTES` | `67108864` (64 MiB) | Expanded DOCX archive ceiling |
+| `ECHO_EXTRACTION_TIMEOUT_SECONDS` | `120` | Parser-process timeout |
+| `ECHO_CHUNK_TOKENS` | `350` | Lexical-token window |
+| `ECHO_CHUNK_OVERLAP` | `60` | Overlap; must be below the window size |
+| `ECHO_MAX_JOB_ATTEMPTS` | `3` | Total attempts, including interruptions |
+| `ECHO_MAX_PENDING_JOBS` | `100` | Combined pending/running capacity |
+
+Chunk sizes are deterministic lexical approximations, not embedding-model token
+counts. These are engineering defaults to benchmark and tune, not demonstrated
+quality or performance guarantees.
+
+## Security and privacy
+
+- **Loopback only:** the supported launcher binds to `127.0.0.1`, disables proxy
+  trust and validates the client address and Host header.
+- **Authenticated requests:** every API call requires the session token. Browser
+  origins must match the explicit allowlist; native clients may omit Origin.
+- **Restrictive CORS:** only GET/POST and Authorization/Content-Type are allowed.
+  Validated browser preflight exposes transport policy without invoking a route;
+  subsequent API requests still require authentication.
+- **Content-safe logs:** fixed events and operational metadata exclude tokens,
+  bodies, queries, file paths, SQL parameters and raw exception messages.
+- **Local storage:** no cloud sync, accounts, external AI calls or runtime
+  telemetry integration is present.
+
+ECHO does **not** provide encryption at rest or end-to-end encryption. Parser
+subprocesses isolate failures but are not an OS sandbox or a hard memory quota.
+Same-user malicious code and administrators remain outside the local HTTP trust
+boundary. Cross-store deletion and broader application hardening are planned.
+
+Read the [security model](docs/security-model.md) before deploying or extending
+this boundary. The service is intended for local use, not exposure through a
+public proxy or tunnel.
+
+## Testing
+
+From the repository root:
 
 ```powershell
-Set-Location C:\Projects\Echo
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-Tests use isolated temporary databases and tiny labelled test fixtures. They
-include a real subprocess server and HTTP requests to a dynamically chosen
-loopback port; they do not need imported documents, an embedding model or
-external services. The final executed results are in `docs/PROGRESS.md`.
+The latest recorded M2 regression completed with **162 passing tests** on
+Windows/Python 3.12.6. Coverage includes authentication, migrations, input
+validation, real parsers, exact chunk offsets, concurrent duplicates, retries,
+timeouts, recovery and a real local HTTP-server import.
 
-## Configuration
+Tests use temporary databases and explicitly synthetic fixtures. They require
+local loopback sockets, but no external service or embedding model. Test-suite
+duration is not a retrieval benchmark. See the [verification record](docs/PROGRESS.md)
+for executed commands, results and known limitations.
 
-Environment variables are read explicitly; `.env` files are not loaded. Values
-are validated with Pydantic. No token is stored in SQLite or in the repository.
+## Research
 
-| Variable | Default | Meaning |
+The central research question is:
+
+> Does hybrid keyword and semantic retrieval, with and without contextual
+> reranking, recover remembered content more effectively than either method alone
+> on a labelled dataset?
+
+The planned comparison includes keyword retrieval, semantic retrieval, hybrid
+retrieval using Reciprocal Rank Fusion, and hybrid retrieval with contextual
+reranking. Evaluation will measure **Precision@5, Recall@5, MRR and NDCG@10**,
+along with median/p95 latency, indexing time and memory use.
+
+Real documents and relevance labels will be supplied for the research dataset.
+Tuning and final-test queries will remain separate; reranker weights must never
+be tuned on the final reporting split. No research corpus, relevance labels or
+benchmark results are bundled or fabricated.
+
+The [evaluation notes](evaluation/README.md) describe the current scope.
+Evaluation code and the dataset contract arrive in M4.
+
+## Roadmap
+
+| Milestone | Deliverable | Status |
 | --- | --- | --- |
-| `ECHO_DATA_DIR` | repository `.local` directory | Local SQLite storage; relative paths resolve against the launch directory |
-| `ECHO_HOST` | `127.0.0.1` | Any other value is rejected |
-| `ECHO_PORT` | `8000` | Integer 1024–65535 |
-| `ECHO_SESSION_TOKEN` | absent | Required to serve; generate with the CLI; 43–128 URL-safe characters |
-| `ECHO_ALLOWED_ORIGINS` | `["http://127.0.0.1:<port>"]` | JSON array of exact loopback HTTP origins with explicit ports; no wildcards or trailing slash |
-| `ECHO_LOG_LEVEL` | `INFO` | `INFO`, `WARNING` or `ERROR` |
-| `ECHO_MAX_UPLOAD_BYTES` | `20971520` (20 MiB) | Per-file limit; checked against actual bytes, even without Content-Length |
-| `ECHO_MAX_EXTRACTED_CHARS` | `5000000` | Cleaned document character ceiling |
-| `ECHO_MAX_PDF_PAGES` | `2000` | PDF page ceiling |
-| `ECHO_MAX_DOCX_EXPANDED_BYTES` | `67108864` (64 MiB) | Sum of uncompressed DOCX members |
-| `ECHO_EXTRACTION_TIMEOUT_SECONDS` | `120` | Time allowed for each parser process |
-| `ECHO_CHUNK_TOKENS` | `350` | Lexical-token window, not a model's WordPiece count |
-| `ECHO_CHUNK_OVERLAP` | `60` | Lexical-token overlap; must be below the window |
-| `ECHO_MAX_JOB_ATTEMPTS` | `3` | Includes interrupted attempts; retries are explicit except crash recovery |
-| `ECHO_MAX_PENDING_JOBS` | `100` | Pending + running queue capacity |
+| M1 · Foundation | Configuration, schema, migrations, local API security and initial tests | Complete |
+| M2 · Ingestion | Validated imports, extraction, chunking and recoverable jobs | Complete |
+| M3 · Search engine | FTS5, FAISS, keyword/semantic/hybrid retrieval, filters, deletion and reconciliation | Next |
+| M4 · Evaluation | Labelled-dataset harness, metrics, resource measurements and tuning/test split | Planned |
+| M5 · Contextual reranking | Configurable normalized signals and tuning-only weight sweeps | Planned |
+| M6 · Dashboard and hardening | Local React dashboard and completed application security flows | Planned |
+| M7 · Optional extensions | OCR, webpage capture and packaging notes | Only on request |
 
-Origin-less authenticated requests are supported for native/CLI clients.
-If a browser sends Origin, it must match the allowlist exactly, including for
-same-origin requests. `localhost` as a Host is accepted on the configured port,
-but its browser Origin requires explicit allowlisting. CORS permits GET/POST
-and Authorization/Content-Type headers. Browser preflight is transport metadata,
-not an API call: an allowed OPTIONS preflight requires no token and invokes no
-route. Every actual API request, including health and unknown routes, requires
-a valid token.
+Development proceeds one milestone at a time. Desktop packaging, browser
+extensions, mobile applications, cloud sync, accounts, PostgreSQL, local LLMs,
+orchestration frameworks and separate vector database servers are outside the
+research-core implementation.
 
-Logs contain fixed event names, UTC timestamps, status codes, generated request
-IDs, job/source IDs, durations and exception class names. They exclude bodies, URLs, queries,
-paths, headers, SQL parameters and exception text. Data is **not encrypted at
-rest**. Use a private local data directory; this is not a defense against
-malware or other code running as the same OS user.
-
-## Layout and milestone boundary
+## Repository structure
 
 ```text
 backend/
-  app/                 API, core, database and security implementation
-                       ingestion/extraction/processing/storage (M2 packages)
-                       embeddings/retrieval (M3 packages)
-  migrations/          immutable Alembic revisions
-  tests/               foundation, security and real-server tests
+  app/
+    api/                  Local HTTP endpoints
+    core/                 Configuration and logging
+    database/             Models and database lifecycle
+    ingestion/            Durable job coordination
+    extraction/           Isolated document parsers
+    processing/           Cleaning and chunking
+    security/             Request and file validation
+    storage/              App-owned files and instance locking
+    embeddings/           Reserved for M3
+    retrieval/            Reserved for M3
+  migrations/             Alembic schema revisions
+  tests/                  Foundation and ingestion tests
 scripts/
-  inspect_chunks.py    bounded metadata inspection; explicit text opt-in
+  inspect_chunks.py       Local chunk inspection
 evaluation/
-  datasets/            empty; user-supplied research data arrives in M4
-  README.md            research scope only, no fabricated results
-docs/
-  PROGRESS.md           status, file inventory, executed checks, limitations
-  decisions.md          rationale and dependency decisions
-  schema.md             schema and invariants
-  security-model.md     protections and trust boundaries
-  ingestion.md          import contract, job recovery, formats and limits
+  datasets/               Reserved for user-supplied research data
+  README.md               Evaluation scope
+docs/                     Design, security and implementation records
 ```
 
-M2 is ingestion; M3 is retrieval (including FTS5 synchronization, FAISS,
-deletion consistency and reconciliation); M4 is evaluation; M5 is contextual
-reranking; M6 is hardening and a local dashboard. Each requires an explicit
-continuation. No frontend directory exists before M6. OCR and webpage capture
-are optional and require an explicit request.
+The frontend will be introduced in M6.
 
-Desktop packaging, extensions, mobile, cloud sync, accounts, installers,
-PostgreSQL, local LLMs, LangChain/LangGraph and vector database servers are
-future-work discussion only; none is scaffolded here.
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [Progress and verification](docs/PROGRESS.md) | Implemented scope, file inventory, executed checks and limitations |
+| [Engineering decisions](docs/decisions.md) | Architectural choices and dependency rationale |
+| [Database schema](docs/schema.md) | Tables, relationships, constraints and lifecycle semantics |
+| [Ingestion specification](docs/ingestion.md) | Import contract, supported formats, processing and recovery |
+| [Security model](docs/security-model.md) | Implemented protections and trust boundaries |
+| [Evaluation scope](evaluation/README.md) | Research methods and dataset requirements |
+| [Changelog](CHANGELOG.md) | Versioned development history |
+| [Contributor instructions](AGENTS.md) | Repository workflow and scope constraints |

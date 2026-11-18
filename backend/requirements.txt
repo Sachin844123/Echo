@@ -1,4 +1,4 @@
-# M1 foundation and M2 extraction; retrieval packages arrive in M3.
+# M1 foundation, M2 extraction and M3 local retrieval.
 fastapi==0.141.1
 # Compatibility constraint: Starlette 1.x deprecates the HTTPX TestClient.
 starlette>=0.47.3,<1
@@ -12,3 +12,7 @@ uvicorn>=0.34,<1
 # Requested M2 document parsers; no OCR or network loaders.
 PyMuPDF>=1.26.7,<2
 python-docx>=1.2,<2
+# Requested M3 local retrieval stack. NumPy is FAISS's array interface.
+faiss-cpu>=1.10,<2
+sentence-transformers>=3.4,<6
+numpy>=1.26,<3

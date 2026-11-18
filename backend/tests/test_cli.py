@@ -53,6 +53,7 @@ def test_real_server_migration_and_security(tmp_path):
     token = secrets.token_urlsafe(32)
     env = {
         **os.environ, "ECHO_DATA_DIR": str(tmp_path / "data with spaces and %"),
+        "ECHO_EMBEDDING_MODEL_DIR": str(tmp_path / "missing-model"),
         "ECHO_SESSION_TOKEN": token, "ECHO_PORT": str(port),
     }
     migrated = run_cli("migrate", env)

@@ -1,9 +1,9 @@
 # ECHO engineering rules
 
-Implement one user-authorized milestone at a time. M1 and M2 are complete and
-tested. Do not begin M3 until the user says continue after the M2 handoff.
-Update this status after each
-milestone. Run its tests, fix failures, update docs/PROGRESS.md,
+Implement one user-authorized milestone at a time. M1, M2 and M3 are complete
+and tested. Stop at the M3 boundary. Do not begin M4 until the user continues
+after the M3 handoff. Update this status after each milestone.
+Run its tests, fix failures, update docs/PROGRESS.md,
 docs/decisions.md and CHANGELOG.md, then stop.
 
 ECHO searches only explicitly imported content. The primary deliverable is

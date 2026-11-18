@@ -1,5 +1,11 @@
 # Schema — revision 0002_retrieval
 
+M4 and M5 change no application tables or migrations. Evaluation creates a separate
+database at each new run's `corpus/echo.sqlite3` using this same schema. Its
+versioned dataset/report JSON contracts are documented in the evaluation guide.
+M5 context hints and weights are request/configuration data, not persisted rows.
+Existing source titles, chunk headings and collection memberships supply signals.
+
 All required values are NOT NULL unless marked nullable below. Integer entity
 IDs use SQLite AUTOINCREMENT so deleted IDs cannot be reassigned. This matters
 when external vector state is stale. All foreign keys use ON DELETE

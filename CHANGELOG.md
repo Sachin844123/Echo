@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.0 — 2026-11-18 — M5 contextual reranking
+
+- Fixed evaluation memory-phase attribution and preservation of primary errors
+  when final memory sampling or failure-artifact storage fails; added four
+  regression checks and a safe structured storage-failure event.
+- Added `hybrid_contextual` mode with normalized RRF, title/heading coverage,
+  exact keyword overlap and explicit source-type/collection context signals.
+- Added validated configurable placeholder weights, separate soft context hints,
+  deterministic ties and per-result signal explanations, preserving A–C behavior.
+- Added evaluation method D and report version 2 with formula/weight provenance.
+- Added bounded explicit tuning-only weight sweeps, per-setting JSON/CSV results
+  and reusable full configurations; final-test sweeps are rejected before work.
+- Added reranking/ablation/API/sweep tests and extended actual offline-model
+  integration to method D and the example sweep. No new dependency or migration.
+- M6 remains unstarted. Research improvements remain unmeasured without user data.
+- Verification: 61 focused checks, four audit regressions and 257 full-regression tests passed, with no
+  skips or warnings in the final suite; dependency checks passed.
+
+## 0.4.0 — 2026-11-18 — M4 evaluation
+
+- Added strict labelled manifests with source-level graded relevance, file/hash
+  validation, source/date/collection metadata and separate tuning/test queries.
+- Added an isolated runner comparing keyword, semantic and hybrid on identical,
+  fully indexed data with macro P@5, R@5, MRR@10 and NDCG@10.
+- Added measured warm-search median/p95 latency, raw per-query samples, indexing
+  wall time and sampled native parent/parser-child RSS through psutil.
+- Added configuration/model/dataset/code/environment provenance, private JSON/CSV
+  reports, safe failure artifacts and no-overwrite output directories.
+- Added dataset/grading/split/measurement documentation and synthetic correctness,
+  isolation, failure and actual offline-model integration tests.
+- No research study or results are supplied. M5 reranking and later milestones
+  remain unstarted; M4 requires user-supplied documents and labels for findings.
+- Verification: 33 focused M4 tests and 228 full-regression tests passed; no
+  skips or warnings in the final suite. Dependency validation passed.
+
 ## 0.3.0 — 2026-11-18 — M3 search engine
 
 - Added migration `0002_retrieval`: FTS5 with synchronization triggers, durable

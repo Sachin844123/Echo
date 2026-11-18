@@ -115,6 +115,16 @@ The dependency lock records the resolved environment, including transitive
 versions; it is not a hash-verified supply-chain lock. Virtual-environment
 activation is optional.
 
+For VS Code, open the repository's `Echo` folder. Workspace settings default to
+the local `.venv`; `pyproject.toml` tells Pylance/Pyright where to resolve
+`app.*` imports and test helpers. If VS Code already selected another Python,
+run **Python: Select Interpreter** and choose `.venv\Scripts\python.exe`, then
+**Developer: Reload Window**. A previously selected interpreter takes precedence
+over the workspace default. Do not disable import diagnostics or rewrite the
+backend imports to remove editor underlines.
+See the [VS Code interpreter settings](https://code.visualstudio.com/docs/python/settings-reference)
+and [Pyright configuration](https://github.com/microsoft/pyright/blob/main/docs/configuration.md).
+
 Download the official embedding model once, from the repository root:
 
 ```powershell

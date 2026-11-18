@@ -3,3 +3,9 @@ testpaths = ["backend/tests"]
 pythonpath = ["backend", "."]
 addopts = "-ra --strict-markers"
 filterwarnings = ["error"]
+
+[tool.pyright]
+include = ["backend", "evaluation", "scripts"]
+extraPaths = ["backend", "backend/tests"]
+venvPath = "."
+venv = ".venv"

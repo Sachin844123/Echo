@@ -8,7 +8,8 @@ from app.database.models import Base
 
 
 def run(connection):
-    context.configure(connection=connection, target_metadata=Base.metadata, compare_type=True)
+    context.configure(connection=connection, target_metadata=Base.metadata, compare_type=True,
+        include_object=lambda obj, name, type_, reflected, compare_to: not (type_ == "table" and name.startswith("chunk_fts")))
     with context.begin_transaction():
         context.run_migrations()
 

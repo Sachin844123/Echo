@@ -17,7 +17,7 @@ from app.main import create_app
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="ECHO local research backend")
-    parser.add_argument("command", choices=("token", "migrate", "serve"))
+    parser.add_argument("command", choices=("token", "migrate", "serve", "rebuild-index"))
     args = parser.parse_args()
     if args.command == "token":
         # Intentional CLI output for capture in a shell variable; never a log record.
@@ -37,6 +37,21 @@ def main() -> int:
             finally:
                 engine.dispose()
             logging.getLogger("echo.cli").info("migration_complete")
+        elif args.command == "rebuild-index":
+            from app.ingestion.service import IngestionService
+            from app.retrieval.engine import SearchEngine
+            engine = create_sqlite_engine(settings.database_path)
+            owner = IngestionService(engine, settings)
+            try:
+                owner.instance_lock.acquire()
+                check_database(engine)
+                owner.store.prepare()
+                search = SearchEngine(engine, settings, owner.mutation_lock, owner.store)
+                search.rebuild()
+            finally:
+                owner.instance_lock.release()
+                engine.dispose()
+            print("Vector index reset; start the server to process queued indexing jobs.")
         else:
             if settings.session_token is None:
                 print("Set ECHO_SESSION_TOKEN using: python -m app token", file=sys.stderr)

@@ -6,6 +6,23 @@
 M1–M4 remain preserved. M6 and optional M7 are unstarted. Stop at the M5
 handoff; M6 needs a subsequent user instruction to continue.
 
+## Editor import fix — 2026-11-18
+
+- Reproduced the repository-root path mismatch: `app` lives in `backend`,
+  while no Pylance/Pyright search paths were configured. Added shared analysis
+  paths in `pyproject.toml` and `.vscode/settings.json` selecting `.venv` by
+  default. Runtime imports and dependencies are unchanged; M6 is unstarted.
+- Validated TOML/JSON and resolved all 142 `app.*`/test-helper import statements
+  against the configured paths. The local virtual environment exists.
+- `.venv\Scripts\python.exe -m pytest --collect-only -q` returned
+  `257 tests collected in 1.67s`.
+- `.venv\Scripts\python.exe -m pytest backend/tests/test_search_api.py backend/tests/test_config.py -q --tb=short`
+  returned **`30 passed in 5.69s`**. `git diff --check` passed.
+- These are configuration/import checks and focused runtime tests; the prior
+  257-test full regression below was not repeated for this editor-only change.
+  Live editor diagnostics were not inspected. README documents selecting the
+  interpreter and reloading if VS Code retained an earlier interpreter choice.
+
 ## M4/M5 audit fixes — 2026-11-18
 
 - Fixed memory readings crossing a phase transition: retain the starting phase

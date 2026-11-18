@@ -6,8 +6,8 @@ ECHO is a software-only research project exploring how people can find documents
 by describing what they remember. It operates on content the user explicitly
 imports, with local storage and a local API.
 
-The current release implements secure ingestion and document preparation.
-Retrieval and comparative evaluation are the next stages of development.
+The current release implements secure ingestion and keyword, semantic and
+hybrid retrieval. Comparative evaluation is the next stage of development.
 ECHO cannot recover information that was never captured.
 
 [Quick start](#quick-start) · [API](#api) · [Configuration](#configuration) ·
@@ -15,20 +15,20 @@ ECHO cannot recover information that was never captured.
 
 ## Project status
 
-**Version 0.2.0 · Foundation and ingestion complete · Search engine pending**
+**Version 0.3.0 · Foundation, ingestion and search · Evaluation next**
 
 | Available now | Planned |
 | --- | --- |
-| PDF, TXT, Markdown, DOCX and manual-note imports | Keyword, semantic and hybrid search |
-| Content validation and SHA-256 duplicate detection | SQLite FTS5 indexing and FAISS vectors |
-| Text extraction, cleaning and contextual metadata | Source filters, management and consistent deletion |
-| Overlapping chunks with exact text offsets | Labelled-dataset evaluation and contextual reranking |
-| Persistent jobs, retries and interrupted-job recovery | Local React dashboard |
-| Authenticated loopback API and structured logs | Full application hardening |
+| PDF, TXT, Markdown, DOCX and manual-note imports | Labelled-dataset evaluation |
+| Keyword, semantic and RRF hybrid search | Contextual reranking |
+| Source, date and collection filters | Local React dashboard |
+| Source management, previews and cross-store deletion | Full dashboard hardening |
+| Persistent jobs, retries and startup reconciliation | Optional OCR and webpage capture, only on request |
+| Authenticated loopback API and structured logs | |
 
-A successful import means the document is **ready for indexing**. It does not
-mean the document is searchable. No retrieval accuracy or performance results
-have been reported.
+Extraction makes content available to keyword search and queues a separate
+embedding job. A source is fully indexed when `processing_status` is `indexed`.
+No retrieval accuracy or performance results have been reported.
 
 ## Capabilities
 
@@ -40,6 +40,10 @@ have been reported.
   numbers, supported headings and exact chunk offsets.
 - **Recoverable processing.** Persist jobs in SQLite, isolate parsers in child
   processes and publish documents and chunks atomically.
+- **Three retrieval modes.** Search with FTS5 BM25, local MiniLM embeddings or
+  Reciprocal Rank Fusion. Results group chunks by source with referenced excerpts.
+- **Controlled scope.** Filter by source type, capture date and collection;
+  rename, preview or delete imported sources through the local API.
 - **Local operation.** Store application data locally and require a session token
   on every API request. The current runtime makes no outbound network or AI API
   calls and includes no telemetry integration.
@@ -59,7 +63,7 @@ normalization rules and recovery behavior.
 
 ## Architecture
 
-The implemented ingestion pipeline is:
+The implemented pipeline is:
 
 ```mermaid
 flowchart LR
@@ -69,15 +73,19 @@ flowchart LR
     D --> E[Isolated parser process]
     E --> F[Clean text and create chunks]
     F --> G[Atomic database publication]
-    G --> H[Ready for future indexing]
+    G --> H[FTS5 via database triggers]
+    G --> I[Durable embedding job]
+    I --> J[Offline MiniLM and FAISS]
+    H --> K[Keyword or RRF hybrid search]
+    J --> K
+    J --> L[Semantic search]
 ```
 
 The backend uses **Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic and
-SQLite**. PyMuPDF and python-docx provide document extraction. One coordinator
-processes ingestion jobs serially, starting one parser child at a time.
-
-FAISS, sentence-transformers and the React dashboard belong to later milestones
-and are not part of the current implementation.
+SQLite**. PyMuPDF and python-docx provide document extraction; sentence-transformers
+and FAISS provide local semantic retrieval. One coordinator processes ingestion
+and indexing jobs serially. The CPU embedding model is loaded once, on demand.
+The React dashboard belongs to M6.
 
 ## Quick start
 
@@ -85,7 +93,8 @@ and are not part of the current implementation.
 
 - Python **3.11+** with SQLite FTS5 support.
 - Windows is the primary development target; commands below use PowerShell.
-- Git to clone the repository and network access to install dependencies.
+- Git to clone the repository; network access for dependency installation and
+  the explicit one-time model download. Application runtime stays offline.
 
 The verified environment is **Windows, Python 3.12.6 and SQLite 3.45.3**.
 Python 3.11 and other operating systems have not yet been verified.
@@ -101,7 +110,20 @@ py -3.12 -m venv .venv
 
 The dependency lock records the resolved environment, including transitive
 versions; it is not a hash-verified supply-chain lock. Virtual-environment
-activation is optional. No embedding model is downloaded in the current release.
+activation is optional.
+
+Download the official embedding model once, from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\prepare_model.py --revision 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+```
+
+The script saves only required model files under `.local/models/`, records the
+revision and SHA-256 checksums, and refuses to overwrite an existing directory.
+This is a setup utility with network access; the API never calls it. For an
+offline machine, copy the complete prepared model directory from another machine.
+Without the model, imports and keyword search work; semantic indexing/search
+report a visible model error. See [model setup and recovery](docs/search.md).
 
 ### 2. Initialize and start
 
@@ -145,6 +167,15 @@ Supply that value privately; never put it in a URL or a committed file.
 | `GET` | `/api/v1/indexing-jobs?limit=20&offset=0` | List jobs and coordinator liveness |
 | `GET` | `/api/v1/indexing-jobs/{id}` | Read status, attempts, errors and chunk count |
 | `POST` | `/api/v1/indexing-jobs/{id}/retry` | Retry an eligible failed job |
+| `POST` | `/api/v1/search` | Keyword, semantic or hybrid search with filters |
+| `GET` | `/api/v1/index/status` | Model availability, indexing completeness and pending deletions |
+| `GET` | `/api/v1/sources` | Paginated source library |
+| `GET`, `PATCH`, `DELETE` | `/api/v1/sources/{id}` | Read metadata, rename or delete a source |
+| `GET` | `/api/v1/sources/{id}/document` | Bounded document-text preview |
+| `GET` | `/api/v1/sources/{id}/chunks` | Paginated chunks and their references |
+| `GET`, `POST` | `/api/v1/collections` | List or create collections |
+| `DELETE` | `/api/v1/collections/{id}` | Delete a collection, retaining its sources |
+| `PUT`, `DELETE` | `/api/v1/collections/{id}/sources/{source_id}` | Add or remove membership |
 
 ### Check health
 
@@ -156,7 +187,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/v1/health' -Headers $headers
 A healthy response is:
 
 ```json
-{"status":"ok","version":"0.2.0","database":"ok"}
+{"status":"ok","version":"0.3.0","database":"ok"}
 ```
 
 Opening the endpoint in a browser address bar without the token returns `401`.
@@ -182,9 +213,25 @@ File uploads use a **raw body**, not multipart form data. A new import returns
 `202` with source/job IDs. Identical captured bytes return `200` with the existing
 IDs; the first capture's metadata is retained.
 
-Poll the job until `succeeded` or `failed`. A successful job reports
-`ready_for_indexing`; a failed job exposes a fixed error code, a safe message
-and whether retry is permitted. Attempt and queue limits apply to retries.
+Poll the returned ingestion job until `succeeded` or `failed`. Success creates
+a second job with `stage: indexing`; inspect the source or job list for embedding
+completion. Failed jobs expose fixed error codes, safe messages and retry
+eligibility. Indexing failure retains extracted content and keyword search.
+
+### Search imported content
+
+```powershell
+$body = @{ query = 'the paper about storing solar energy'; mode = 'hybrid'; limit = 10 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/v1/search' `
+  -Headers $headers -ContentType 'application/json' -Body $body
+```
+
+Use `keyword`, `semantic` or `hybrid`. Optional filters are `source_types`,
+`captured_from`, `captured_to` and `collection_id`; dates require an explicit
+timezone. Responses include one best excerpt per source, page/heading/offset
+references and an `indexing_incomplete` flag. Dates filter results without a
+recency boost. [Search contracts and examples](docs/search.md) cover score
+semantics, grouping and recovery.
 
 ### Inspect chunks locally
 
@@ -221,10 +268,18 @@ Configuration is read from environment variables and validated at startup.
 | `ECHO_CHUNK_OVERLAP` | `60` | Overlap; must be below the window size |
 | `ECHO_MAX_JOB_ATTEMPTS` | `3` | Total attempts, including interruptions |
 | `ECHO_MAX_PENDING_JOBS` | `100` | Combined pending/running capacity |
+| `ECHO_EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Expected model identity |
+| `ECHO_EMBEDDING_MODEL_DIR` | Repository `.local/models/all-MiniLM-L6-v2/` | Prepared offline model |
+| `ECHO_EMBEDDING_BATCH_SIZE` | `16` | Maximum model windows per inference batch |
+| `ECHO_EMBEDDING_THREADS` | `2` | CPU Torch threads |
+| `ECHO_CANDIDATE_POOL` | `50` | Filtered candidates per retrieval method |
+| `ECHO_RESULT_LIMIT` | `10` | Visible source results; cannot exceed candidate pool |
+| `ECHO_RRF_K` | `60` | Reciprocal Rank Fusion constant |
 
 Chunk sizes are deterministic lexical approximations, not embedding-model token
-counts. These are engineering defaults to benchmark and tune, not demonstrated
-quality or performance guarantees.
+counts. MiniLM input is split into model-sized WordPiece windows and pooled,
+so long chunks are not silently truncated. These are engineering defaults to
+benchmark and tune, not demonstrated quality or performance guarantees.
 
 ## Security and privacy
 
@@ -232,7 +287,7 @@ quality or performance guarantees.
   trust and validates the client address and Host header.
 - **Authenticated requests:** every API call requires the session token. Browser
   origins must match the explicit allowlist; native clients may omit Origin.
-- **Restrictive CORS:** only GET/POST and Authorization/Content-Type are allowed.
+- **Restrictive CORS:** GET/POST/PATCH/PUT/DELETE and Authorization/Content-Type are allowed.
   Validated browser preflight exposes transport policy without invoking a route;
   subsequent API requests still require authentication.
 - **Content-safe logs:** fixed events and operational metadata exclude tokens,
@@ -243,7 +298,9 @@ quality or performance guarantees.
 ECHO does **not** provide encryption at rest or end-to-end encryption. Parser
 subprocesses isolate failures but are not an OS sandbox or a hard memory quota.
 Same-user malicious code and administrators remain outside the local HTTP trust
-boundary. Cross-store deletion and broader application hardening are planned.
+boundary. Deletion removes database rows, FTS entries, vectors and owned files;
+interrupted removal is retried. This does not promise forensic erasure of WAL,
+backups or SSD blocks. Broader application hardening remains M6.
 
 Read the [security model](docs/security-model.md) before deploying or extending
 this boundary. The service is intended for local use, not exposure through a
@@ -258,13 +315,16 @@ From the repository root:
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-The latest recorded M2 regression completed with **162 passing tests** on
-Windows/Python 3.12.6. Coverage includes authentication, migrations, input
-validation, real parsers, exact chunk offsets, concurrent duplicates, retries,
-timeouts, recovery and a real local HTTP-server import.
+Coverage includes authentication, migrations, input validation, real parsers,
+chunk offsets, concurrent duplicates, retries, FTS synchronization, FAISS
+snapshots, RRF, filters, deletion recovery and real offline-model integration.
+The recorded M1–M3 regression completed with **195 passing tests**, no skips
+and no warnings, on Windows/Python 3.12.6.
 
 Tests use temporary databases and explicitly synthetic fixtures. They require
-local loopback sockets, but no external service or embedding model. Test-suite
+local loopback sockets. Provision the model above to run the real-model tests;
+those two tests explicitly skip when its descriptor is absent. Tests never
+download a model or call an external service. Test-suite
 duration is not a retrieval benchmark. See the [verification record](docs/PROGRESS.md)
 for executed commands, results and known limitations.
 
@@ -295,7 +355,7 @@ Evaluation code and the dataset contract arrive in M4.
 | --- | --- | --- |
 | M1 · Foundation | Configuration, schema, migrations, local API security and initial tests | Complete |
 | M2 · Ingestion | Validated imports, extraction, chunking and recoverable jobs | Complete |
-| M3 · Search engine | FTS5, FAISS, keyword/semantic/hybrid retrieval, filters, deletion and reconciliation | Next |
+| M3 · Search engine | FTS5, FAISS, keyword/semantic/hybrid retrieval, filters, deletion and reconciliation | Complete |
 | M4 · Evaluation | Labelled-dataset harness, metrics, resource measurements and tuning/test split | Planned |
 | M5 · Contextual reranking | Configurable normalized signals and tuning-only weight sweeps | Planned |
 | M6 · Dashboard and hardening | Local React dashboard and completed application security flows | Planned |
@@ -319,12 +379,13 @@ backend/
     processing/           Cleaning and chunking
     security/             Request and file validation
     storage/              App-owned files and instance locking
-    embeddings/           Reserved for M3
-    retrieval/            Reserved for M3
+    embeddings/           Offline model verification and bounded inference
+    retrieval/            FAISS snapshots, search, RRF and reconciliation
   migrations/             Alembic schema revisions
-  tests/                  Foundation and ingestion tests
+  tests/                  Foundation, ingestion and retrieval tests
 scripts/
   inspect_chunks.py       Local chunk inspection
+  prepare_model.py        Explicit setup-only model download
 evaluation/
   datasets/               Reserved for user-supplied research data
   README.md               Evaluation scope
@@ -341,6 +402,7 @@ The frontend will be introduced in M6.
 | [Engineering decisions](docs/decisions.md) | Architectural choices and dependency rationale |
 | [Database schema](docs/schema.md) | Tables, relationships, constraints and lifecycle semantics |
 | [Ingestion specification](docs/ingestion.md) | Import contract, supported formats, processing and recovery |
+| [Search specification](docs/search.md) | Retrieval, model setup, filters, source APIs and recovery |
 | [Security model](docs/security-model.md) | Implemented protections and trust boundaries |
 | [Evaluation scope](evaluation/README.md) | Research methods and dataset requirements |
 | [Changelog](CHANGELOG.md) | Versioned development history |

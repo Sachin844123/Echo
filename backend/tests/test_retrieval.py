@@ -115,7 +115,7 @@ def test_fts_triggers_changes_cascades_and_repair(engine):
         assert connection.exec_driver_sql("SELECT count(*) FROM chunk_fts").scalar() == 0
 
 
-@pytest.mark.parametrize("mode", ["keyword", "semantic", "hybrid"])
+@pytest.mark.parametrize("mode", ["keyword", "semantic", "hybrid", "hybrid_contextual"])
 def test_modes_group_sources_excerpts_and_filters(searcher, mode):
     old = datetime(2020, 1, 1, tzinfo=timezone.utc)
     solar = indexed(searcher, 1, ["TEST DATA solar solar solar", "TEST DATA solar second excerpt"], captured_at=old)
@@ -149,7 +149,7 @@ def test_filter_before_candidate_cutoff(searcher):
         collection_id = collection.id
         session.add(CollectionItem(collection_id=collection_id, source_id=ids[-1]))
     searcher.settings = searcher.settings.model_copy(update={"candidate_pool": 10})
-    for mode in ("keyword", "semantic", "hybrid"):
+    for mode in ("keyword", "semantic", "hybrid", "hybrid_contextual"):
         results = searcher.search(SearchInput(query="solar", mode=mode, collection_id=collection_id))["results"]
         assert [row["source_id"] for row in results] == [ids[-1]]
 
@@ -159,7 +159,7 @@ def test_keyword_syntax_is_literal_and_mismatch_refuses_semantics(searcher):
     for value in ('" OR * - : NEAR(', "'; DROP TABLE sources;--", "💡"):
         searcher.search(SearchInput(query=value, mode="keyword"))
     searcher.encoder.identity = ModelIdentity("DIFFERENT TEST MODEL", "v2", 3)
-    for mode in ("semantic", "hybrid"):
+    for mode in ("semantic", "hybrid", "hybrid_contextual"):
         with pytest.raises(RetrievalFailure, match="model_mismatch"):
             searcher.search(SearchInput(query="solar", mode=mode))
     assert searcher.search(SearchInput(query="solar", mode="keyword"))["results"]

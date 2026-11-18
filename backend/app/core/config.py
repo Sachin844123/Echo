@@ -13,6 +13,24 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, m
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+class RerankWeights(BaseModel):
+    """Untuned placeholder weights; shared by the API and evaluation runner."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True, allow_inf_nan=False)
+
+    rrf: float = Field(default=1.0, ge=0, le=100)
+    title_heading: float = Field(default=0.2, ge=0, le=100)
+    keyword_overlap: float = Field(default=0.2, ge=0, le=100)
+    source_type: float = Field(default=0.1, ge=0, le=100)
+    collection: float = Field(default=0.1, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def nonzero(self):
+        if not any(self.model_dump().values()):
+            raise ValueError("at least one reranking weight must be positive")
+        return self
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -38,6 +56,7 @@ class Settings(BaseModel):
     candidate_pool: int = Field(default=50, ge=10, le=200)
     result_limit: int = Field(default=10, ge=1, le=50)
     rrf_k: int = Field(default=60, ge=1, le=1000)
+    rerank_weights: RerankWeights = Field(default_factory=RerankWeights)
 
     @field_validator("data_dir", "embedding_model_dir")
     @classmethod
@@ -106,4 +125,6 @@ class Settings(BaseModel):
         values = {field: os.environ[name] for name, field in names.items() if name in os.environ}
         if "ECHO_ALLOWED_ORIGINS" in os.environ:
             values["allowed_origins"] = json.loads(os.environ["ECHO_ALLOWED_ORIGINS"])
+        if "ECHO_RERANK_WEIGHTS" in os.environ:
+            values["rerank_weights"] = json.loads(os.environ["ECHO_RERANK_WEIGHTS"])
         return cls.model_validate(values)

@@ -9,3 +9,6 @@ htmlcov/
 *.sqlite3
 *.sqlite3-*
 *.log
+evaluation/datasets/*
+!evaluation/datasets/.gitkeep
+!evaluation/datasets/README.md

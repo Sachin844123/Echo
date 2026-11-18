@@ -1,5 +1,71 @@
 # Decisions
 
+## M3 — 2026-11-18
+
+1. **Separate durable stages.** Add revision `0002_retrieval`, preserving M2
+   data. Existing jobs become `ingestion`; extraction atomically queues an
+   `indexing` job. A failed model/index operation preserves extracted content.
+   One coordinator, one model and a shared mutation/search lock keep lifecycle
+   state understandable. Search/source operations can wait behind indexing;
+   asynchronous parallel model pools are deliberately deferred pending measurement.
+
+2. **Requested retrieval libraries.** Add faiss-cpu and sentence-transformers.
+   Declare NumPy explicitly because application code uses its float32/int64
+   arrays as FAISS's interface; it is already a required transitive dependency.
+   Torch, Transformers, tokenizers, safetensors, Hugging Face Hub and scientific
+   dependencies come through sentence-transformers; no orchestration framework,
+   separate vector server or additional download client was added. Refresh the
+   resolved dependency lock and run `pip check`.
+
+3. **Explicit setup, offline runtime.** A standard-library setup script downloads
+   only required official MiniLM files at a recorded revision. Runtime validates
+   hashes and uses local safetensors with remote code disabled and offline/
+   telemetry-disabled environment settings. No automatic download, secret API
+   key, cloud embedding or fake encoder fallback exists. Model absence is a
+   visible error; keyword functionality remains usable. Tests use the real model
+   for integration and explicitly labelled deterministic vectors only for unit
+   ordering/failure cases.
+
+4. **Preserve chunk coverage.** Lexical chunks can exceed MiniLM's WordPiece
+   capacity. Embed overlapping 32-WordPiece windows, normalize each, then take
+   a token-count-weighted mean and normalize again. Include this policy in the
+   model fingerprint. Defaults are hypotheses for M4; no quality improvement is
+   claimed. Transformers 5 removed `prepare_for_model`, so construct the supported
+   MiniLM/BERT CLS/window/SEP tensors directly. Use the renamed dimension API when
+   available; do not suppress deprecation warnings to make tests pass.
+
+5. **FTS as derived state.** A content-bearing FTS5 table indexes text, title and
+   heading. Database triggers synchronize inserts, edits, title/source changes
+   and cascaded deletion; chunk edits invalidate embedding metadata. Startup
+   verifies trigger definitions and actual content and rebuilds on drift. Keep
+   virtual/shadow tables outside ORM autogeneration, with static migration SQL.
+
+6. **Recoverable snapshots.** Use normalized vectors in IDMap/FlatIP, chunk IDs
+   as vector IDs, checksummed generation files and an atomic manifest pointer.
+   Persist FAISS before committing SQLite metadata; reconcile interrupted gaps
+   using chunk hashes, IDs and model identity. Remove old snapshots after saves.
+   A valid different model never silently overwrites the index: an explicit
+   stopped-server `rebuild-index` resets derived state and queues fresh jobs.
+
+7. **Transparent retrieval.** Literal OR keyword tokens and unweighted FTS BM25;
+   cosine semantic ranking; RRF with one-based ranks and configurable k=60.
+   Apply date/type/collection filters before top-50 selection and group by source
+   afterward. Return the best excerpt and references. No raw-score addition,
+   recency boost, contextual reranker or confidence interpretation. Report an
+   incomplete-index flag so M4 cannot silently compare unequal indexed corpora.
+
+8. **Recoverable deletion.** Commit a tombstone before cross-store cleanup;
+   hide the source immediately and retry interrupted removal. Only report
+   deletion complete after vectors/old snapshots, owned file and cascaded rows
+   are removed. Parser completion cannot resurrect deleted sources. This is
+   logical application-store removal, not forensic disk erasure.
+
+9. **Narrow source APIs.** Include metadata, rename, bounded text/chunk preview,
+   deletion and minimal collections/membership to make search filters usable.
+   Keep all routes authenticated; restrict JSON request sizes and new CORS
+   methods explicitly. No frontend, arbitrary file-serving, content-editing,
+   delete-all or evaluation scaffolding is introduced.
+
 ## M2 — 2026-11-17–18
 
 1. **Keep the schema.** M1's normalized tables already represent M2. Do not

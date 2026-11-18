@@ -16,6 +16,10 @@ from app.database.migrate import check_database
 from app.security.middleware import LocalSecurityMiddleware
 from app.ingestion.errors import ImportFailure
 from app.ingestion.service import IngestionService
+from app.api.search import router as search_router, retrieval_failure_handler
+from app.api.sources import router as sources_router
+from app.retrieval.engine import SearchEngine
+from app.retrieval.errors import RetrievalFailure
 
 
 logger = logging.getLogger("echo.app")
@@ -37,6 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.engine = engine
             app.state.session_factory = create_session_factory(engine)
             ingestion = IngestionService(engine, settings)
+            app.state.search = SearchEngine(engine, settings, ingestion.mutation_lock, ingestion.store)
+            ingestion.indexer = app.state.search
             await run_in_threadpool(ingestion.start)
             app.state.ingestion = ingestion
             logger.info("startup_complete")
@@ -56,11 +62,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware, allow_origins=list(settings.allowed_origins),
-        allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"],
         allow_credentials=False, expose_headers=["X-Request-ID"], max_age=600,
     )
     app.add_middleware(LocalSecurityMiddleware, settings=settings)
     app.include_router(router)
     app.include_router(ingestion_router)
+    app.include_router(search_router)
+    app.include_router(sources_router)
     app.add_exception_handler(ImportFailure, import_failure_handler)
+    app.add_exception_handler(RetrievalFailure, retrieval_failure_handler)
     return app

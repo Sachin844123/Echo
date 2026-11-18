@@ -52,7 +52,7 @@ def test_real_semantic_worker_api_and_deletion(client, app, auth, real_encoder):
             break
         time.sleep(0.05)
     assert status["processing_status"] == "indexed"
-    for mode in ("keyword", "semantic", "hybrid"):
+    for mode in ("keyword", "semantic", "hybrid", "hybrid_contextual"):
         result = client.post("/api/v1/search", headers=auth, json={"query": "solar electricity", "mode": mode})
         assert result.status_code == 200, result.text
         assert result.json()["results"][0]["source_id"] == source

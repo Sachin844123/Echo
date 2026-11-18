@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0 — 2026-11-18 — M3 search engine
+
+- Added migration `0002_retrieval`: FTS5 with synchronization triggers, durable
+  ingestion/indexing stages and embedding content fingerprints; preserves M2 data.
+- Added offline MiniLM embeddings, bounded WordPiece window pooling, configurable
+  batches, normalized FAISS IDMap/FlatIP snapshots and checksummed model manifests.
+- Added keyword, semantic and RRF hybrid search with type/date/collection filters,
+  source grouping, referenced excerpts and explicit incomplete-index reporting.
+- Added source metadata/rename/preview/deletion, minimal collection membership,
+  index status, recoverable tombstones and startup cross-store reconciliation.
+- Added explicit model provisioning and stopped-server `rebuild-index` commands;
+  no model downloads or external AI requests occur in application runtime.
+- Added retrieval/recovery/security tests, real offline-model integration and
+  search documentation. M4 evaluation and later milestones remain unstarted.
+- Final M1–M3 regression: 195 passed, no skips or warnings; dependency validation
+  passed. No research relevance or performance results are claimed.
+
 ## 0.2.0 — 2026-11-18 — M2 ingestion
 
 - Added authenticated raw-file and manual-note imports, streamed byte limits,

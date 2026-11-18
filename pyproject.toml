@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
-pythonpath = ["backend"]
+pythonpath = ["backend", "."]
 addopts = "-ra --strict-markers"
 filterwarnings = ["error"]

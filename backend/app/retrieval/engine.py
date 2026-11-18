@@ -12,6 +12,7 @@ from app.database.models import Chunk, CollectionItem, Document, EmbeddingRecord
 from app.embeddings.local import LocalEncoder
 from app.retrieval.errors import RetrievalFailure
 from app.retrieval.vectors import VectorStore
+from app.retrieval.reranking import Candidate, RERANK_VERSION, rerank
 
 
 def digest(value: str) -> str:
@@ -220,7 +221,7 @@ class SearchEngine:
                 eligible = eligible.where(Source.id.in_(select(CollectionItem.source_id).where(
                     CollectionItem.collection_id == query.collection_id)))
             keyword, semantic = [], []
-            if query.mode in ("keyword", "hybrid"):
+            if query.mode in ("keyword", "hybrid", "hybrid_contextual"):
                 tokens = list(dict.fromkeys(re.findall(r"\w+", query.query, flags=re.UNICODE)))
                 if tokens:
                     # Quotes make every token literal; user text is never FTS query syntax.
@@ -229,14 +230,14 @@ class SearchEngine:
                     rows = session.execute(select(fts.c.id, fts.c.score).where(fts.c.id.in_(eligible))
                         .order_by(fts.c.score, fts.c.id).limit(pool), {"match": expression}).all()
                     keyword = [(key, float(score)) for key, score in rows]
-            if query.mode in ("semantic", "hybrid"):
+            if query.mode in ("semantic", "hybrid", "hybrid_contextual"):
                 identity = self._identity()
                 if self.vectors.index is None:
                     raise RetrievalFailure("index_unavailable")
                 valid = eligible.where(Chunk.id.in_(select(EmbeddingRecord.chunk_id).where(
                     EmbeddingRecord.model_name == identity.name, EmbeddingRecord.model_version == identity.version)))
                 semantic = self.vectors.search(self.encoder.encode([query.query]), set(session.scalars(valid)), pool)
-            if query.mode == "hybrid":
+            if query.mode in ("hybrid", "hybrid_contextual"):
                 hits = reciprocal_rank_fusion(keyword, semantic, self.settings.rrf_k)
             elif query.mode == "keyword":
                 hits = [(key, -score) for key, score in keyword]
@@ -244,10 +245,31 @@ class SearchEngine:
                 hits = semantic
             keyword_ranks = {key: rank for rank, (key, _) in enumerate(keyword, 1)}
             semantic_ranks = {key: rank for rank, (key, _) in enumerate(semantic, 1)}
+            reranked = {}
+            candidate_rows = {}
+            if query.mode == "hybrid_contextual" and hits:
+                rows = session.execute(select(Chunk, Source).join(Document, Chunk.document_id == Document.id)
+                    .join(Source, Document.source_id == Source.id).where(Chunk.id.in_([key for key, _ in hits]))).all()
+                candidate_rows = {chunk.id: (chunk, source) for chunk, source in rows}
+                collection_sources = set()
+                if query.context.collection_id is not None:
+                    collection_sources = set(session.scalars(select(CollectionItem.source_id).where(
+                        CollectionItem.collection_id == query.context.collection_id,
+                        CollectionItem.source_id.in_({source.id for _, source in rows}))))
+                candidates = [Candidate(key, score, candidate_rows[key][1].title,
+                    candidate_rows[key][0].heading, candidate_rows[key][0].chunk_text,
+                    candidate_rows[key][1].source_type, candidate_rows[key][1].id in collection_sources)
+                    for key, score in hits]
+                ordered = rerank(candidates, query.query, query.context.source_types, self.settings.rerank_weights, self.settings.rrf_k)
+                reranked = {hit.chunk_id: hit for hit in ordered}
+                hits = [(hit.chunk_id, hit.score) for hit in ordered]
             seen, results = set(), []
             for chunk_id, score in hits:
-                chunk, source = session.execute(select(Chunk, Source).join(Document, Chunk.document_id == Document.id).join(Source, Document.source_id == Source.id)
-                    .where(Chunk.id == chunk_id)).one()
+                if chunk_id in candidate_rows:
+                    chunk, source = candidate_rows[chunk_id]
+                else:
+                    chunk, source = session.execute(select(Chunk, Source).join(Document, Chunk.document_id == Document.id).join(Source, Document.source_id == Source.id)
+                        .where(Chunk.id == chunk_id)).one()
                 if source.id in seen:
                     continue
                 seen.add(source.id)
@@ -256,7 +278,12 @@ class SearchEngine:
                     "excerpt": chunk.chunk_text, "page_number": chunk.page_number, "heading": chunk.heading,
                     "start_offset": chunk.start_offset, "end_offset": chunk.end_offset,
                     "score": score, "keyword_rank": keyword_ranks.get(chunk_id), "semantic_rank": semantic_ranks.get(chunk_id)})
+                if chunk_id in reranked:
+                    results[-1].update(rrf_score=reranked[chunk_id].rrf_score, rerank_signals=reranked[chunk_id].signals)
                 if len(results) >= limit:
                     break
-            return {"mode": query.mode, "results": results, "candidate_counts": {"keyword": len(keyword), "semantic": len(semantic)},
-                    "indexing_incomplete": self.status()["indexing_incomplete"]}
+            response = {"mode": query.mode, "results": results, "candidate_counts": {"keyword": len(keyword), "semantic": len(semantic)},
+                        "indexing_incomplete": self.status()["indexing_incomplete"]}
+            if query.mode == "hybrid_contextual":
+                response["reranking"] = {"version": RERANK_VERSION, "weights": self.settings.rerank_weights.model_dump()}
+            return response

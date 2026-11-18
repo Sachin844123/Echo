@@ -1,4 +1,6 @@
 -r requirements.txt
 pytest>=8.3,<10
+# M4 evaluation needs native-process RSS, including parser children, on Windows.
+psutil>=6.1,<8
 # Starlette TestClient's HTTP transport; tests only, not a runtime network client.
 httpx>=0.28,<0.29

@@ -120,6 +120,7 @@ class EmbeddingRecord(CreatedAt, Base):
     model_version: Mapped[str] = mapped_column(String(100))
     vector_index_id: Mapped[int] = mapped_column(Integer, unique=True)
     dimension: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64), server_default="")
 
 
 class Collection(UpdatedAt, Base):
@@ -142,11 +143,13 @@ class IndexingJob(UpdatedAt, Base):
         CheckConstraint("status IN ('pending','running','succeeded','failed')", name="status"),
         CheckConstraint("attempts >= 0", name="attempts"),
         Index("ix_indexing_jobs_status_created", "status", "created_at"),
+        Index("ix_indexing_jobs_stage_status", "stage", "status"),
         {"sqlite_autoincrement": True},
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(20), server_default="pending")
+    stage: Mapped[str] = mapped_column(String(20), CheckConstraint("stage IN ('ingestion','indexing')", name="stage"), server_default="ingestion")
     attempts: Mapped[int] = mapped_column(Integer, server_default="0")
     error: Mapped[str | None] = mapped_column(Text)
 

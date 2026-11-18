@@ -1,0 +1,20 @@
+{
+  "chunk_tokens": 350,
+  "chunk_overlap": 60,
+  "candidate_pool": 50,
+  "rrf_k": 60,
+  "rerank_weights": {
+    "rrf": 1.0,
+    "title_heading": 0.2,
+    "keyword_overlap": 0.2,
+    "source_type": 0.1,
+    "collection": 0.1
+  },
+  "embedding_batch_size": 16,
+  "embedding_threads": 2,
+  "repeats": 3,
+  "warmups": 1,
+  "seed": 1729,
+  "memory_sample_ms": 50,
+  "job_timeout_seconds": 600
+}

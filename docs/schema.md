@@ -1,8 +1,8 @@
-# Schema — revision 0001_foundation
+# Schema — revision 0002_retrieval
 
 All required values are NOT NULL unless marked nullable below. Integer entity
 IDs use SQLite AUTOINCREMENT so deleted IDs cannot be reassigned. This matters
-when future external vector state is stale. All foreign keys use ON DELETE
+when external vector state is stale. All foreign keys use ON DELETE
 CASCADE and have a leading index (including unique/primary indexes).
 
 | Table | Columns and purpose |
@@ -10,10 +10,11 @@ CASCADE and have a leading index (including unique/primary indexes).
 | sources | id; source_type; title; original_url (nullable); file_path (nullable); mime_type; unique content_hash; captured_at; indexed_at (nullable); processing_status; is_deleted; created_at; updated_at |
 | documents | id; unique source_id FK; extracted_text; language (nullable); extraction_method; extraction_status; content_length; created_at |
 | chunks | id; document_id FK; chunk_index; chunk_text; token_count; page_number (nullable); heading (nullable); start_offset; end_offset; created_at |
-| embedding_records | id; unique chunk_id FK; model_name; model_version; unique vector_index_id; dimension; created_at |
+| embedding_records | id; unique chunk_id FK; model_name; model_version; unique vector_index_id; dimension; content_hash; created_at |
 | collections | id; unique name; description (nullable); created_at; updated_at |
 | collection_items | composite PK (collection_id FK, source_id FK); created_at |
-| indexing_jobs | id; source_id FK; status; attempts; error (nullable); created_at; updated_at |
+| indexing_jobs | id; source_id FK; stage; status; attempts; error (nullable); created_at; updated_at |
+| chunk_fts | FTS5 virtual table: chunk_text, title, heading; rowid equals chunk ID |
 | app_settings | key PK; value (text); created_at; updated_at |
 
 `alembic_version` is migration metadata, not application data. Settings values
@@ -27,8 +28,8 @@ operational configuration from the environment and stores no secrets here.
   lowercase 64-character SHA-256 hex values, calculated over the captured bytes.
   File paths are app-owned relative paths (`imports/<random-id>.<extension>`).
 - Source processing status: `pending`, `processing`, `indexed`, `failed`.
-  `is_deleted` is restricted to 0 or 1; it is reserved state, not evidence of
-  physical deletion. Source indexes cover captured time, type + captured time,
+  `is_deleted` is restricted to 0 or 1; 1 is a durable pending-deletion tombstone,
+  not evidence of completed cleanup. Source indexes cover captured time, type + captured time,
   processing status and deletion flag.
 - Document extraction status: `pending`, `complete`, `failed`; nonnegative
   content_length, measured in Unicode code points after extraction. Language is
@@ -37,27 +38,30 @@ operational configuration from the environment and stores no secrets here.
   nonblank text, positive token_count, positive one-based page number when
   known. Offsets are zero-based, half-open Unicode code-point offsets into the
   document text; `0 <= start_offset < end_offset`. M2 uses lexical words and
-  punctuation (long runs split every 32 characters); model tokenization is not
-  yet involved. Exact chunk slices and overlap are covered by tests.
+  punctuation (long runs split every 32 characters). MiniLM uses separate bounded
+  WordPiece windows when embedding. Exact chunk slices and overlap are tested.
 - Embeddings: positive dimension; nonblank model identity and version;
-  `vector_index_id = chunk_id`. Metadata is present; vectors are not yet built.
+  `vector_index_id = chunk_id`. `content_hash` is the SHA-256 of chunk text;
+  legacy empty hashes are invalidated during reconciliation. Model version is
+  a fingerprint of the verified model files and pooling policy. Vectors live in
+  FAISS, never as SQL BLOBs.
 - Collection names are nonblank and case-sensitive unique. Membership is
   unique by its composite key. Source-side lookups have a separate index.
 - Job status: `pending`, `running`, `succeeded`, `failed`; attempts >= 0, initially
-  0. Indexes cover source and `(status, created_at)`. A source may have multiple
-  job records. M2 uses one durable job per imported source. Each claim increments
+  0. Stage is constrained to `ingestion` or `indexing`, defaulting to ingestion.
+  Indexes cover source, `(status, created_at)` and `(stage, status)`. A source has
+  separate ingestion/indexing jobs and may receive later repair jobs. Each claim increments
   attempts; the default maximum is three. Errors contain fixed public codes,
   not copied parser exceptions or content.
 
-M2 needs no schema migration: the existing schema supports capture, extraction,
-chunks and jobs. A successful ingestion atomically publishes a complete document,
-all its chunks and a `succeeded` job. `sources.processing_status` returns to
-`pending` because search indexing has not happened; `indexed_at` remains NULL.
-Use job status / `ready_for_indexing` for M2 completion, not `processing_status`
-alone. M3 must distinguish ingestion from retrieval-index work when extending
-the jobs lifecycle. Extraction failures persist an empty failed document and
-no chunks. Interrupted jobs exhausted during startup recovery may have no
-document because extraction never completed.
+M2 required no schema change. M3 migration preserves existing rows, assigns old
+jobs to the ingestion stage and backfills FTS. Successful ingestion atomically
+publishes document/chunks/FTS, marks the ingestion job succeeded and queues an
+indexing job. Source status remains pending until indexing starts, then becomes
+indexed with a UTC `indexed_at` only after FAISS persistence and metadata commit.
+Extraction failure leaves an empty failed document; indexing failure retains
+completed extraction and keyword entries. Startup queues existing M2 documents
+for embeddings. Failed indexing attempts are not automatically reset forever.
 
 ## Timestamps, deletion and synchronization
 
@@ -71,10 +75,14 @@ Timestamps are not a monotonic ordering or concurrency token.
 
 Deleting a source cascades through its document, chunks, embedding metadata,
 collection memberships and jobs. Deleting a collection removes only its
-memberships; source content remains. These are database semantics only in M1/M2.
-There is no file/vector deletion API yet, and logical database deletion does
+memberships; source content remains. The M3 deletion service coordinates these
+cascades with owned-file and FAISS cleanup. Logical database deletion does
 not guarantee forensic erasure of disk pages, WAL, backups or SSD blocks.
 
-FTS5 table, title/heading/chunk synchronization triggers, FAISS persistence and
-startup reconciliation will be introduced together in M3. The M1 startup
-FTS5 probe creates no persistent search table.
+FTS5 uses `unicode61 remove_diacritics 2`. Chunk insert/update/delete triggers
+synchronize text and headings; source-title and document-source triggers keep
+title metadata current. Chunk-text edits invalidate embedding records. Startup
+checks FTS integrity, trigger SQL and content against chunks/documents/sources,
+then verifies vector IDs, model metadata and chunk hashes. Missing/corrupt derived
+state is repaired from durable normalized data. Virtual-table shadow tables are
+managed by SQLite and excluded from ORM autogeneration. See [search](search.md).

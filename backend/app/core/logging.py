@@ -10,6 +10,7 @@ EVENTS = frozenset({
     "startup_complete", "shutdown_complete", "startup_failed", "request_complete",
     "request_failed", "database_unavailable", "migration_complete", "command_failed",
     "job_succeeded", "job_failed", "worker_failed", "jobs_recovered",
+    "failure_artifact_write_failed",
 })
 
 

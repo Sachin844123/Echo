@@ -30,7 +30,7 @@ def test_keyword_available_without_model_and_index_job_error(client, auth, app):
     assert result.status_code == 200, result.text
     assert result.json()["results"][0]["source_id"] == source
     assert result.json()["indexing_incomplete"]
-    for mode in ("semantic", "hybrid"):
+    for mode in ("semantic", "hybrid", "hybrid_contextual"):
         response = client.post("/api/v1/search", headers=auth, json={"query": "TEST DATA PRIVATE QUERY", "mode": mode})
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "model_unavailable"

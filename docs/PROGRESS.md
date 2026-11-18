@@ -2,9 +2,211 @@
 
 ## Current state — 2026-11-18 (Asia/Calcutta)
 
-**M1, M2 and M3 SEARCH ENGINE are complete and tested. Stopped at the M3 boundary.**
-M1/M2 remain preserved. M4–M6 and optional M7 are unstarted. Stop at the M3
-handoff; M4 needs a subsequent user instruction to continue.
+**M1 through M5 CONTEXTUAL RERANKING are complete and tested. Stopped at the M5 boundary.**
+M1–M4 remain preserved. M6 and optional M7 are unstarted. Stop at the M5
+handoff; M6 needs a subsequent user instruction to continue.
+
+## M4/M5 audit fixes — 2026-11-18
+
+- Fixed memory readings crossing a phase transition: retain the starting phase
+  and synchronize missed-child counters.
+- Fixed final memory-read errors masking the primary evaluation failure; stop
+  the sampler and preserve the original error with a safe secondary note.
+- Fixed failure-artifact storage errors masking the original safe failure code;
+  emit a redacted structured event when the artifact cannot be written.
+- Added four regression cases. Before the fixes, the focused command returned
+  `4 failed, 33 deselected in 3.02s`; afterward it returned
+  `4 passed, 33 deselected in 0.68s`:
+  `.venv\Scripts\python.exe -m pytest backend/tests/test_evaluation.py -q --tb=short -k "memory_sample_keeps or final_memory_read or failure_artifact_write"`.
+- Dependency validation returned `No broken requirements found.` Local Markdown
+  links resolve, and the publish inventory contains only source, tests,
+  configuration and documentation. No M6 work was started.
+- Final full regression: `.venv\Scripts\python.exe -m pytest -q --tb=short`
+  returned **`257 passed in 401.05s (0:06:41)`**, with no skips or warnings.
+  `git diff --check` also passed. Publication uses one changed file per commit
+  on the GitHub default branch, `master`; private runtime data stays ignored.
+
+## M5 delivered
+
+- Explicit `hybrid_contextual` search mode (evaluation method D), reranking the
+  same hybrid candidate union before source grouping; A–C and hard filters remain.
+- Normalized theoretical-max RRF, title/heading coverage, exact query-token
+  overlap, explicit source-type match and collection membership signals.
+- Shared validated immutable weights in server/evaluation configuration; finite,
+  nonnegative placeholders with at least one positive value. RRF-only ablation
+  preserves C ordering. Stable ties use original RRF then chunk ID.
+- Optional soft context hints separate from hard filters; no recency/history or
+  wording inference, no bypass of filters and no additional captured content.
+- Per-result normalized signal explanations, original RRF and effective weights/
+  formula version. Reports use version 2 and compare four methods.
+- Explicit bounded weight grids, tuning-only CLI/internal guards, one shared
+  corpus, seeded setting order, per-setting metrics/timings and reusable full
+  configurations with safe Windows filenames. No automatic winner selection.
+- Documentation of formula, context collection, ablation, tuning/test discipline
+  and limits; unit/API tests and actual offline-model sweep integration.
+
+### M5 files
+
+New: `backend/app/retrieval/reranking.py`, `backend/tests/test_reranking.py`,
+`evaluation/sweep.py`, `evaluation/weights.example.json`, `docs/reranking.md`.
+Updated: backend configuration, search request schema/search engine/version,
+API/retrieval/search/embedding/evaluation regression tests, evaluation dataset/
+runner/example config/README, root README, AGENTS, CHANGELOG, and progress,
+decisions, search, schema and security documentation. Existing M4 work is
+preserved. No new dependencies, migrations, frontend or M6 work.
+
+### M5 verification
+
+Executed from `C:\Projects\Echo`:
+
+- `.venv\Scripts\python.exe -m pytest backend/tests/test_reranking.py backend/tests/test_retrieval.py backend/tests/test_config.py -q --tb=short`
+  returned **`61 passed in 20.29s`**.
+- `python -m pip check`: `No broken requirements found.`
+- Full M1–M5 regression: `.venv\Scripts\python.exe -m pytest -q --tb=short`
+  returned **`253 passed in 368.01s (0:06:08)`**, with no skips or warnings.
+- Shared weight defaults/example config, the example grid and local documentation
+  links validated. Runner help exposes the tuning-only sweep option; Git diff
+  whitespace checks passed. No failing test was ignored.
+
+Checks cover hand-calculated normalized scoring, Unicode/case/token matching,
+independent signal effects, RRF-only/tie equivalence, unchanged A–C behavior,
+candidate-count/hard-filter preservation, grouping and signal explanations,
+authentication/redacted validation errors, finite/nonzero weights, explicit
+complete grids, case-insensitive ID collisions, unknown context collections,
+test-split rejection before file access, tuning-only outputs, frozen config
+hashes and settings restoration on failure. The real MiniLM CLI test now runs
+method D and all three example sweep settings without downloading anything.
+
+### M5 run commands
+
+From the repository root, after supplying real documents and labels:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation\run_eval.py --dataset .local\datasets\my-study\dataset.json --config evaluation\config.example.json --split tuning --weight-sweep evaluation\weights.example.json --output .local\evaluation\my-study-sweep-01
+.\.venv\Scripts\python.exe -m pytest -q --tb=short
+```
+
+Output directories must be new. Choose a saved `configs/weights-<id>.json` using
+tuning evidence, then run `--split test --config <selected-file>` without a
+sweep. API mode is `hybrid_contextual`; optional `context.source_types` and
+`context.collection_id` are soft hints. Set `ECHO_RERANK_WEIGHTS` JSON before
+starting the server to override placeholders. App launch is unchanged; exact
+PowerShell instructions remain in README.
+
+### M5 decisions and limitations
+
+- All signals are normalized before weighted combination. Title/heading uses
+  maximum query coverage, not a sum. Repeated terms do not inflate overlap.
+  No stemming, fuzzy matching, stopword removal or recency boost is included.
+- Missing/unmatched hints have zero signals; A–C ignore hints. D can use extra
+  remembered context, which must be gathered independently of relevance labels.
+  Scores are ranking values, not confidence probabilities.
+- Default/example weights are untuned placeholders, not measured improvements.
+  Real documents/labels are still required; no research findings are fabricated.
+- Sweeps report every setting and choose none. Test-split guards cannot prevent
+  human inspection of labels, paraphrase leakage or repeated manual test tuning.
+- Sweeps reuse indexing but perform full searches per setting. Work grows with
+  settings/repeats/query count. Whole-run memory includes sweeps; method-phase
+  peaks are shared-process residency, not isolated per-setting costs.
+- Windows/Python 3.12 remains the verified environment. No new hardware-memory
+  or latency guarantees, encryption claims, packaging or M6 hardening are added.
+
+## M4 delivered
+
+- Strict dataset/config contracts: explicit authorized local files, stable IDs,
+  grades 0–3, timezone-aware capture/filter metadata, collections and nonempty
+  tuning/test splits. Reject duplicate bytes, bad paths, unknown references,
+  filtered-out positive labels and duplicate normalized queries.
+- Fresh isolated corpus per run using the existing ingestion/search engine.
+  Require complete, matching DB/FTS/embedding/vector ID sets for all documents
+  before comparing A=keyword, B=semantic and C=hybrid on identical selected queries.
+- Source-level macro Precision@5, Recall@5, MRR truncated at ten results and
+  graded NDCG@10, with explicit definitions and unjudged-as-nonrelevant semantics.
+- Real warm in-process latency samples, median/nearest-rank p95, indexing wall
+  time and bounded sampled native parent/parser-child RSS aggregation.
+- Separate tuning/test runs, explicit configuration for final-test CLI runs,
+  seeded query order, rotated method order, warmups and fixed-result repeats.
+- Private JSON/CSV reports with dataset/split/config/model/code/environment
+  fingerprints; no query text, document contents, excerpts, titles, paths or tokens.
+- Safe failure artifacts and no output overwrites, silent document exclusions,
+  method fallback, fabricated success or automatic publishing of research data.
+- Dataset/grading/split/measurement documentation and tiny TEST DATA tests,
+  including a fresh-process runner using the actual offline MiniLM model.
+
+### M4 files
+
+New: `evaluation/__init__.py`, `dataset.py`, `metrics.py`, `resources.py`,
+`run_eval.py`, `config.example.json`, `evaluation/datasets/README.md`, and
+`backend/tests/test_evaluation.py`.
+
+Updated: evaluation/README.md, root README, .gitignore, AGENTS, CHANGELOG,
+pyproject test import paths, backend requirements-dev/requirements-lock,
+application version and health test, docs/decisions, schema, security model
+and this progress record. No application schema, ingestion or retrieval
+algorithms changed. No M5 reranker/sweep or frontend was created.
+
+### M4 verification
+
+Executed from `C:\Projects\Echo`:
+
+- First focused suite: `1 failed, 28 passed in 116.02s (0:01:56)`. The sole
+  failure compared a measured floating-point median to an exact decimal;
+  `10.499999999999998` correctly represents the calculation. Changed the test
+  to numeric tolerance, preserving full measured precision in the implementation.
+- Expanded focused suite: `.venv\Scripts\python.exe -m pytest backend/tests/test_evaluation.py -q --tb=short`
+  returned **`33 passed in 87.40s (0:01:27)`**.
+- `python -m pip check`: `No broken requirements found.`
+- Runner `--help` and `git diff --check` succeeded.
+- Full M1–M4 regression: `.venv\Scripts\python.exe -m pytest -q --tb=short`
+  returned **`228 passed in 179.01s (0:02:59)`**, with no skips or warnings.
+- The example configuration matches validated defaults; all local documentation
+  links resolve. The normal application DB remains at `0002_retrieval` with
+  zero sources; evaluation did not import fixtures into the user's library.
+
+Tests verify known graded-ranking arithmetic and cutoffs, small-sample p95,
+invalid grades/contracts, JSON duplicate keys, path restrictions, byte duplicates,
+normalized-query leakage, held-out-only scoring, fixed config fingerprints,
+failure/no-overwrite behavior, aborted comparisons after corrupt document
+extraction, unstable rankings, actual child-process RSS and real offline-model
+CLI integration. Exported artifacts exclude the fixture's private markers and
+held-out query IDs during a tuning run. No failing test was ignored.
+
+### M4 run commands
+
+Install updated development/evaluation dependencies and use the already prepared
+model. From the repository root, after supplying real documents and labels:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt -c backend\requirements-lock.txt
+.\.venv\Scripts\python.exe evaluation\run_eval.py --dataset .local\datasets\my-study\dataset.json --config evaluation\config.example.json --split tuning --output .local\evaluation\my-study-tuning-01
+.\.venv\Scripts\python.exe -m pytest -q --tb=short
+```
+
+Replace input/output placeholders and use a new output directory every time.
+Final `--split test` requires an explicit configuration selected on tuning data.
+App launch remains `python -m app migrate`, generate `ECHO_SESSION_TOKEN`, then
+`python -m app serve` from backend; see README for full PowerShell commands.
+
+### M4 decisions and limitations
+
+- psutil is an evaluation/development dependency because native Torch/FAISS and
+  parser-child memory are not covered by tracemalloc. The API does not import it.
+- Latencies are warm in-process calls, excluding HTTP/serialization. Sampled
+  memory peaks are lower bounds; shared pages may be double-counted and method
+  phases share a resident model/index. Indexing time is one shared-corpus cost,
+  includes first model loading and polling, and excludes preflight/setup.
+- Metrics use source labels and ten returned sources; MRR is explicitly @10.
+  Unjudged means nonrelevant. Incomplete labels bias scores; no-positive queries
+  are rejected. Candidate grouping can return fewer than ten sources.
+- Normalized-text checks cannot detect paraphrase leakage or prevent human
+  inspection/tuning on held-out labels. Human study design remains essential.
+- Full manifests are bounded at 32 MiB; FAISS/corpus/result storage still scales
+  with study size. There is no i3/8-GB performance or RSS guarantee. Processing
+  deadlines are soft around bounded embedding batches; no hard native quota.
+- Reports retain opaque IDs/hashes and private corpus copies. They are not
+  encrypted and are not automatically deleted or committed. No real study has
+  been run: user-supplied documents and judgments are still required. Fixture
+  measurements/scores are verification only and are not research evidence.
 
 ## M3 delivered
 

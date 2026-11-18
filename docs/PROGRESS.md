@@ -2,9 +2,109 @@
 
 ## Current state — 2026-11-18 (Asia/Calcutta)
 
-**M1 and M2 INGESTION are complete and tested. Stopped at the M2 boundary.**
-M3 SEARCH ENGINE has not started and requires the user to say
-`continue`. M4–M6 and optional M7 are also unstarted.
+**M1, M2 and M3 SEARCH ENGINE are complete and tested. Stopped at the M3 boundary.**
+M1/M2 remain preserved. M4–M6 and optional M7 are unstarted. Stop at the M3
+handoff; M4 needs a subsequent user instruction to continue.
+
+## M3 delivered
+
+- SQLite FTS5 text/title/heading index, synchronization triggers, populated-M2
+  migration and startup integrity/content/trigger reconciliation.
+- Offline MiniLM, one lazy model instance, CPU/batch configuration, bounded
+  WordPiece window pooling and explicit setup-only model provisioning.
+- Normalized FAISS IDMap/FlatIP with chunk IDs, checksummed generation files,
+  atomic manifests, model fingerprints and explicit model-mismatch refusal.
+- Keyword, semantic and RRF hybrid search; type/date/collection filters before
+  candidate cutoff; deterministic source grouping and referenced excerpts.
+- Durable ingestion/indexing stages, retained attempts, safe failures, retry,
+  orphan/stale-vector repair and an explicit `rebuild-index` CLI.
+- Source metadata/rename/preview/deletion and minimal collections/membership;
+  recoverable deletion tombstones spanning SQLite, FTS, FAISS and owned files.
+- Authenticated bounded search/management APIs, explicit readiness/incomplete
+  status, real-model integration and synthetic fault/ordering fixtures.
+
+### M3 files
+
+New implementation: `backend/app/api/{search,sources}.py`,
+`backend/app/database/fts.py`, `backend/app/embeddings/local.py`,
+`backend/app/retrieval/{engine,errors,vectors}.py`,
+`backend/migrations/versions/0002_retrieval.py`, `scripts/prepare_model.py`.
+Updated integration: application version/launcher/factory, configuration,
+database models/migration helper, ingestion service and Alembic environment.
+
+New tests: `test_retrieval.py`, `test_search_api.py`, `test_embeddings.py`.
+Updated fixtures and API/CLI/schema/ingestion regression expectations for M3.
+Updated dependency requirements and exact resolved lock. Documentation changes:
+README, this file, decisions, schema, security model, ingestion, new search
+specification, CHANGELOG and AGENTS milestone boundary. No evaluation/frontend
+files were created or changed.
+
+### M3 verification
+
+Executed from `C:\Projects\Echo` with the isolated project environment:
+
+- Schema suite: `32 passed in 10.60s` before additional M3 upgrade tests.
+- Initial retrieval unit/recovery suite: `13 passed in 5.79s`.
+- Focused API, retrieval and actual offline-model integration suite:
+  `27 passed in 89.13s (0:01:29)`.
+- Real-model smoke: `(2, 384)`, norms `[1. 0.99999994]`, loaded-instance reuse
+  `True`. This verifies shape/normalization/reuse, not retrieval performance.
+- Dependency validation: `No broken requirements found.`
+- Full regression: `.venv\Scripts\python.exe -m pytest -q --tb=short`
+  returned **`195 passed in 200.21s (0:03:20)`**, with no skipped tests or warnings.
+- `git diff --check` and local documentation-link validation passed.
+- The default local database contained zero sources before upgrade; the supported
+  `python -m app migrate` command completed successfully to revision
+  `0002_retrieval`. No synthetic fixture documents were imported into it.
+
+Commands to run from the repository root after dependencies/model provisioning:
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m app migrate
+$env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
+..\.venv\Scripts\python.exe -m app serve
+```
+
+Tests, from a repository-root terminal:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --tb=short
+.\.venv\Scripts\python.exe -m pip check
+```
+
+Testing exposed Transformers 5's removed tokenizer preparation method and renamed
+dimension API. The implementation now constructs supported MiniLM/BERT tensors
+directly and uses the current dimension method with older-version compatibility.
+No warning was suppressed. M2 assertions about ingestion-only job counts/source
+pending state and the old CORS method list were updated for separate indexing
+jobs and the new management routes. No failing test was ignored.
+
+The model was provisioned at upstream revision
+`1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Model files, local data, caches and the
+virtual environment remain Git-ignored. The README requested before M3 was
+committed locally as `f166176`; M3 implementation changes are separate.
+
+### M3 decisions and limitations
+
+- Additional direct NumPy declaration supplies the FAISS array interface;
+  other new direct packages are the requested faiss-cpu/sentence-transformers.
+- One CPU worker/model avoids parallel model copies. Search/source mutations
+  are serialized with indexing, so large jobs can delay those requests.
+- FAISS index and serialization require memory proportional to corpus size.
+  No i3/8-GB memory or latency guarantee has been measured. WordPiece pooling
+  and retrieval defaults need M4 evaluation, not claims of proven superiority.
+- A prepared model is required for semantic operations; missing-model errors
+  retain extraction and keyword usability. Real-model tests explicitly skip
+  only if their local model descriptor is absent; they never download fixtures.
+- Failed indexing retries respect attempt caps; exhausted jobs can be reset
+  through explicit `rebuild-index`. Permanent disk/path failures can leave a
+  visible pending deletion or prevent repair; no false completion is returned.
+- Deletion is application-store removal, not forensic erasure of WAL/backups/SSD
+  blocks. There is no at-rest or end-to-end encryption claim.
+- No contextual reranker, evaluation runner/data/results, frontend, OCR, webpage
+  capture or packaging was implemented. Windows/Python 3.12.6 is verified;
+  Python 3.11 and other platforms remain unverified.
 
 ## Environment and preserved M1 foundation
 

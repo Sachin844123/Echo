@@ -31,8 +31,15 @@ class Settings(BaseModel):
     chunk_overlap: int = Field(default=60, ge=0, le=1000)
     max_job_attempts: int = Field(default=3, ge=1, le=10)
     max_pending_jobs: int = Field(default=100, ge=1, le=1000)
+    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_model_dir: Path = REPO_ROOT / ".local" / "models" / "all-MiniLM-L6-v2"
+    embedding_batch_size: int = Field(default=16, ge=1, le=64)
+    embedding_threads: int = Field(default=2, ge=1, le=8)
+    candidate_pool: int = Field(default=50, ge=10, le=200)
+    result_limit: int = Field(default=10, ge=1, le=50)
+    rrf_k: int = Field(default=60, ge=1, le=1000)
 
-    @field_validator("data_dir")
+    @field_validator("data_dir", "embedding_model_dir")
     @classmethod
     def resolve_data_dir(cls, value: Path) -> Path:
         return value.expanduser().resolve()
@@ -63,6 +70,8 @@ class Settings(BaseModel):
     def default_origin(self) -> Self:
         if self.chunk_overlap >= self.chunk_tokens:
             raise ValueError("chunk_overlap must be smaller than chunk_tokens")
+        if self.result_limit > self.candidate_pool:
+            raise ValueError("result_limit cannot exceed candidate_pool")
         if not self.allowed_origins:
             object.__setattr__(self, "allowed_origins", (f"http://127.0.0.1:{self.port}",))
         return self
@@ -87,6 +96,12 @@ class Settings(BaseModel):
             "ECHO_EXTRACTION_TIMEOUT_SECONDS": "extraction_timeout_seconds",
             "ECHO_CHUNK_TOKENS": "chunk_tokens", "ECHO_CHUNK_OVERLAP": "chunk_overlap",
             "ECHO_MAX_JOB_ATTEMPTS": "max_job_attempts", "ECHO_MAX_PENDING_JOBS": "max_pending_jobs",
+            "ECHO_EMBEDDING_MODEL_NAME": "embedding_model_name",
+            "ECHO_EMBEDDING_MODEL_DIR": "embedding_model_dir",
+            "ECHO_EMBEDDING_BATCH_SIZE": "embedding_batch_size",
+            "ECHO_EMBEDDING_THREADS": "embedding_threads",
+            "ECHO_CANDIDATE_POOL": "candidate_pool", "ECHO_RESULT_LIMIT": "result_limit",
+            "ECHO_RRF_K": "rrf_k",
         }
         values = {field: os.environ[name] for name, field in names.items() if name in os.environ}
         if "ECHO_ALLOWED_ORIGINS" in os.environ:

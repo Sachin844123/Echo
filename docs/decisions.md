@@ -1,5 +1,114 @@
 # Decisions
 
+## M4/M5 audit — 2026-11-18
+
+- Attribute each memory reading to the phase captured before querying process
+  RSS. A phase transition during a slow process read must not relabel that
+  sample. Aggregate missed child reads under the same statistics lock.
+- Stop and join the sampler even when evaluation fails. A final sampling
+  failure invalidates an otherwise successful run with a safe code; when a
+  primary failure already exists, preserve it and attach a safe sampling note.
+- Treat the failure artifact as best effort when storage is unavailable.
+  Preserve the primary error and emit an allowlisted
+  `failure_artifact_write_failed` event without paths or exception messages.
+  A missing completion report still means the run failed. No new dependencies
+  or milestone scope changes are needed.
+
+## M5 — 2026-11-18
+
+1. **Rerank the existing hybrid union.** Add explicit `hybrid_contextual` mode
+   (evaluation D), retaining hybrid as the API default and preserving A–C.
+   Apply hard filters/candidate cutoffs first, then rerank chunks and group by
+   source. No new candidates, vector work or recency boost are introduced.
+
+2. **Normalize every component.** Divide RRF by its two-list theoretical maximum,
+   use unique normalized query-token coverage for title/heading and chunk text,
+   and use binary type/collection matches. Title/heading takes maximum coverage,
+   avoiding double-counting the same metadata match. Combine by nonnegative
+   normalized weights; tie-break on original RRF then chunk ID. Return signal
+   explanations and original RRF. These scores are not confidence probabilities.
+
+3. **Separate soft context from hard filters.** Add optional nested `context`
+   with source-type/collection hints. Existing top-level filters still exclude
+   candidates; soft context only affects D ranking. Reusing hard filters as
+   match signals would be constant for all survivors, so separate hints are
+   necessary. Missing/unmatched hints score zero; no wording/history inference
+   exists. Dataset hints must be collected independently of relevance judgments.
+
+4. **One validated configuration model.** Shared immutable RerankWeights supports
+   API environment JSON and evaluation configuration, finite nonnegative values
+   capped at 100, and at least one positive weight. Defaults are explicit untuned
+   placeholders. RRF-only weighting preserves C's ordering and enables ablation.
+   No new dependency, embedding-model change or schema migration is needed.
+
+5. **Bounded tuning-only grids.** Accept 1–100 explicit complete weight settings,
+   reject duplicate vectors/IDs (including case collisions), shuffle settings
+   with the recorded seed and reuse one corpus. CLI/internal guards reject test
+   sweeps before reading inputs or creating output. The sweep helper selects
+   dataset.queries.tuning directly, never the requested final-test queries.
+
+6. **Report every setting, select none automatically.** Save metrics, latency
+   samples, weights, configuration hashes and full reusable configurations.
+   Prefix config filenames to avoid Windows reserved device names. Restore
+   original search settings even on failure; publish completion JSON last.
+   Report version 2 records method D/formula identity and optional sweep results.
+   Use a predeclared objective on tuning evidence to choose a fixed test config.
+   Do not claim effectiveness from synthetic checks or placeholder weights.
+
+## M4 — 2026-11-18
+
+1. **Evaluate the production engine on an isolated corpus.** A CLI run creates
+   a new directory, imports only declared local files with existing validation/
+   extraction/indexing, applies supplied titles/dates/collections and waits for
+   every source to be indexed. Compare exact DB/FTS/embedding/vector ID sets.
+   Reuse one corpus for A=keyword, B=semantic and C=hybrid; abort on any failure
+   instead of omitting sources or falling back. Preserve the normal library.
+
+2. **Explicit labelled contract.** Require versioned JSON, stable opaque IDs,
+   known document references, grades 0–3, timezone-aware dates and nonempty
+   tuning/test splits. Resolve files inside the manifest directory; reject
+   duplicate bytes because the production importer deduplicates them. Reject
+   positive labels excluded by filters and queries with no known positive.
+   No research documents, labels or results are invented. Synthetic tests are
+   explicitly marked in their inputs and reports.
+
+3. **Hold out queries.** Reject duplicate IDs and normalized query text across
+   the dataset. Evaluate exactly the selected split, default tuning; require
+   an explicit configuration for final-test CLI runs and fingerprint it. No
+   automatic parameter selection or reranker sweep exists in M4. Semantic
+   paraphrase leakage and human inspection of test labels require study-design
+   discipline; these checks are not a claim of access control over held-out data.
+
+4. **Define metrics precisely.** Score distinct sources: fixed-denominator P@5,
+   R@5 against all positive labels, MRR truncated at ten returned sources,
+   NDCG@10 with exponential graded gains. Unjudged documents are grade zero.
+   Macro-average queries once; latency repetitions do not duplicate quality
+   observations. Reject duplicate results or ranking changes between repeats.
+   Explicit cutoff metadata avoids presenting truncated MRR as unlimited MRR.
+
+5. **Measure real work, disclose scope.** Use perf_counter for indexing and warm
+   in-process search, record per-query samples, median and nearest-rank p95.
+   Warm all selected query/method pairs, shuffle queries with a recorded seed,
+   rotate method order and keep all methods on the same index. Indexing includes
+   first model load but excludes preflight/setup; HTTP overhead and cold-cache
+   latency are not claimed. No benchmark findings are inferred from tiny fixtures.
+
+6. **Justified evaluation dependency.** Add psutil to development/evaluation
+   requirements, not the API runtime dependency list. Native Torch/FAISS memory
+   and parser-child RSS cannot be measured by Python tracemalloc alone. Sample
+   parent and summed process-tree RSS, aggregate bounded peak/count state,
+   disclose interval/missed children/shared-page double-counting, and label
+   peaks as sampled lower bounds. Method-phase RSS is shared-process residency,
+   not isolated algorithm attribution. Record the dependency in the lock.
+
+7. **Private reproducible artifacts.** Save JSON/CSV with selected-query IDs,
+   ranked document IDs, metrics, timing samples, resource use and dataset/model/
+   config/code/environment fingerprints. Omit content, titles, query text,
+   input paths and tokens. Preserve private corpus copies for auditing; never
+   overwrite a run, delete inputs or auto-publish data. Git-ignore dataset data
+   and default run directories. Publish report.json only after successful work;
+   failed runs get safe failure codes, not partial success metrics.
+
 ## M3 — 2026-11-18
 
 1. **Separate durable stages.** Add revision `0002_retrieval`, preserving M2

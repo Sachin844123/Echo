@@ -46,12 +46,15 @@ def test_migration_matches_models_and_is_idempotent(engine):
     check_database(engine)
     upgrade_database(engine)
     with engine.connect() as connection:
-        assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+        assert compare_metadata(MigrationContext.configure(connection, opts={
+            "include_object": lambda obj, name, type_, reflected, compare_to: not (type_ == "table" and name.startswith("chunk_fts"))
+        }), Base.metadata) == []
         assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
         assert connection.exec_driver_sql("PRAGMA journal_mode").scalar_one() == "wal"
         assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
     tables = set(inspect(engine).get_table_names())
-    assert tables == set(Base.metadata.tables) | {"alembic_version"}
+    assert {name for name in tables if not name.startswith("chunk_fts")} == set(Base.metadata.tables) | {"alembic_version"}
+    assert "chunk_fts" in tables
 
 
 def test_migration_downgrade_upgrade(engine):
@@ -133,6 +136,7 @@ def test_content_hash_uniqueness(engine):
     "UPDATE chunks SET end_offset=start_offset", "UPDATE chunks SET chunk_text=' '",
     "UPDATE embedding_records SET dimension=0", "UPDATE embedding_records SET vector_index_id=999",
     "UPDATE indexing_jobs SET attempts=-1", "UPDATE indexing_jobs SET status='invalid'",
+    "UPDATE indexing_jobs SET stage='invalid'",
     "UPDATE documents SET content_length=-1", "UPDATE documents SET extraction_status='invalid'",
     "UPDATE sources SET is_deleted=2", "UPDATE collections SET name=' '",
 ])
@@ -210,3 +214,23 @@ def test_foreign_key_columns_have_leading_indexes(engine):
         prefixes.add(tuple(inspector.get_pk_constraint(table)["constrained_columns"][:1]))
         for key in keys:
             assert tuple(key["constrained_columns"][:1]) in prefixes, (table, key)
+
+
+def test_upgrade_populated_m2_backfills_fts_without_losing_rows(tmp_path):
+    old = create_sqlite_engine(tmp_path / "m2.sqlite3")
+    try:
+        config = alembic_config()
+        with old.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "0001_foundation")
+            connection.exec_driver_sql("INSERT INTO sources(source_type,title,mime_type,content_hash) VALUES ('note','TEST DATA legacy title','text/plain',?)", ("f" * 64,))
+            connection.exec_driver_sql("INSERT INTO documents(source_id,extracted_text,extraction_method,extraction_status,content_length) VALUES (1,'TEST DATA legacy','manual','complete',16)")
+            connection.exec_driver_sql("INSERT INTO chunks(document_id,chunk_index,chunk_text,token_count,start_offset,end_offset) VALUES (1,0,'TEST DATA legacy',3,0,16)")
+            connection.exec_driver_sql("INSERT INTO indexing_jobs(source_id,status,attempts) VALUES (1,'succeeded',1)")
+        upgrade_database(old)
+        with old.connect() as connection:
+            assert connection.exec_driver_sql("SELECT rowid FROM chunk_fts WHERE chunk_fts MATCH 'legacy'").scalar_one() == 1
+            assert connection.exec_driver_sql("SELECT stage FROM indexing_jobs").scalar_one() == "ingestion"
+            assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+    finally:
+        old.dispose()

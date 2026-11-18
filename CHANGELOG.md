@@ -2,6 +2,8 @@
 
 ## 0.5.0 — 2026-11-18 — M5 contextual reranking
 
+- Fixed repository-root editor resolution of `app.*` and test-helper imports
+  through shared Pyright/Pylance paths and a local virtual-environment default.
 - Fixed evaluation memory-phase attribution and preservation of primary errors
   when final memory sampling or failure-artifact storage fails; added four
   regression checks and a safe structured storage-failure event.

@@ -30,7 +30,7 @@ def isolated_environment(monkeypatch):
 
 @pytest.fixture
 def settings(tmp_path):
-    return Settings(data_dir=tmp_path, session_token=secrets.token_urlsafe(32))
+    return Settings(data_dir=tmp_path, embedding_model_dir=tmp_path / "missing-model", session_token=secrets.token_urlsafe(32))
 
 
 @pytest.fixture

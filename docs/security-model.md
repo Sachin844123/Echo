@@ -1,4 +1,4 @@
-# Local security model — M1–M3
+# Local security model — M1–M5
 
 ECHO is a single-user local process. The primary boundaries are the HTTP server,
 the local session token and the user's filesystem permissions. It is not a
@@ -78,6 +78,24 @@ multi-user service and has no account system.
   retried by the worker/startup. An in-flight parser cannot republish the source.
 
 ## Trust and limitations
+
+M5 adds no endpoint or external service. Context hints pass through the existing
+bounded authenticated JSON search API; they are not persisted or logged.
+Reranking uses only eligible imported candidates and never bypasses hard filters.
+Weights are validated server/evaluation configuration, not per-request overrides.
+Tuning grids are bounded, reject ambiguous IDs, use safe prefixed output filenames,
+and cannot run against the test split. Reports retain the existing privacy rules;
+effective weights and formula identifiers are operational metadata, not secrets.
+
+The M4 evaluation CLI runs under the same local OS account and opens no HTTP
+port. It requires explicit local dataset paths, confines declared document
+paths to the manifest directory, creates a new isolated output/corpus and never
+overwrites the application library. It uses the same validated imports and
+offline encoder. Reports exclude content, titles, query text, input paths and
+tokens, but retain opaque IDs/hashes and judgments-derived metrics; these can
+still be sensitive. Private corpus copies remain on disk for auditing. Default
+run and dataset data are Git-ignored. CLI errors use fixed safe codes. Split
+validation supports experimental discipline, not access control over test labels.
 
 The local filesystem is not encrypted by ECHO. The process environment is not
 a secret vault. Same-user malware, an administrator or a debugger can read

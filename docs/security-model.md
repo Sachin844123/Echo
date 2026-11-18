@@ -1,4 +1,4 @@
-# Local security model — M1 and M2
+# Local security model — M1–M3
 
 ECHO is a single-user local process. The primary boundaries are the HTTP server,
 the local session token and the user's filesystem permissions. It is not a
@@ -24,7 +24,7 @@ multi-user service and has no account system.
   null origins, userinfo, nonlocal hosts, non-HTTP schemes, paths, queries and
   fragments are rejected. Native clients may omit Origin but still need the
   token. Origin and CORS are additional browser boundaries, not authentication.
-- CORS allows GET/POST and Authorization/Content-Type, no credential cookies. A
+- CORS allows GET/POST/PATCH/PUT/DELETE and Authorization/Content-Type, no credential cookies. A
   validated browser preflight may be unauthenticated because browsers do not
   send bearer credentials on preflight. It invokes no route and exposes no
   application data. Requests that follow it must authenticate.
@@ -60,9 +60,22 @@ multi-user service and has no account system.
   and extracted-character limits constrain accepted work.
 - Stored bytes are rehashed before parsing. DB publication is atomic. Startup
   recovers interrupted jobs and removes only recognizable, unreferenced
-  app-owned files. These ingestion repairs are separate from M3 FTS/FAISS repair.
+  app-owned files. Startup also reconciles FTS, embeddings and FAISS snapshots.
 - `scripts/inspect_chunks.py` prints metadata by default. `--show-text` is an
   explicit user request to display private content, not operational logging.
+- Semantic runtime uses only prepared local safetensors, verified file hashes,
+  disabled remote code and explicit offline/telemetry-disabled settings. The
+  separate `prepare_model.py` setup utility uses network access only when invoked.
+- Search/management JSON bodies are limited to 16 KiB. Keyword tokens are quoted
+  literals and SQL parameters are bound. Dates require timezones. Source previews
+  are bounded and internal file paths are never returned by source/search APIs.
+- FAISS manifests verify file checksums before deserialization and validate index
+  types, dimensions, IDs and norms. These checks detect accidental drift/corruption;
+  they do not authenticate files against same-user tampering. Index paths stay
+  within the owned vector directory. Models must match the configured identity.
+- Deletion commits a hidden tombstone before removing vectors, snapshots, files
+  and DB/FTS rows. File/IO failures remain visible as pending deletion and are
+  retried by the worker/startup. An in-flight parser cannot republish the source.
 
 ## Trust and limitations
 
@@ -85,7 +98,9 @@ allocate memory before text limits are checked. An abruptly killed parent can
 leave a parser child alive until that child exits; it cannot publish DB state.
 Normal server shutdown terminates its active parser and requeues unfinished work.
 
-Cross-store deletion, FTS5/vector drift recovery and index reconciliation belong
-to M3. Broader request-rate/disk quotas, dashboard interactions and delete-all
-belong to M6. Those protections are not represented as implemented here. Do not
-expose this service through a proxy or tunnel.
+Deletion does not promise forensic erasure of SQLite pages/WAL, backups or SSD
+blocks. FAISS and its serialization require memory proportional to the index;
+there is no measured RSS guarantee or hard quota. Source/index mutations and
+search are serialized; indexing can delay those requests. Broader request-rate/
+disk quotas, dashboard interactions and delete-all belong to M6. Do not expose
+this service through a proxy or tunnel.

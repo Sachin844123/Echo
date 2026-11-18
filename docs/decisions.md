@@ -1,5 +1,16 @@
 # Decisions
 
+## Editor import resolution — 2026-11-18
+
+- Keep `app` rooted in `backend`, matching the supported server launch and
+  pytest configuration. Configure Pylance/Pyright search paths in the existing
+  `pyproject.toml` for backend code and test helpers, with analysis scoped to
+  backend, evaluation and scripts. Do not suppress missing-import diagnostics.
+- Default VS Code to the repository's `.venv` using a portable folder path.
+  Pyright CLI uses the same environment; Pylance uses VS Code's selected Python.
+  Document interpreter selection for workspaces that already cached another
+  interpreter. No dependency, runtime import or M6 change is required.
+
 ## M4/M5 audit — 2026-11-18
 
 - Attribute each memory reading to the phase captured before querying process

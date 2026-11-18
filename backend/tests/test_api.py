@@ -11,7 +11,7 @@ from app.main import create_app
 def test_health_hits_local_database(client, auth):
     response = client.get("/api/v1/health", headers=auth)
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.2.0", "database": "ok"}
+    assert response.json() == {"status": "ok", "version": "0.3.0", "database": "ok"}
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert len(response.headers["x-request-id"]) == 32
@@ -67,7 +67,7 @@ def test_preflight_only_exposes_transport_policy(client):
     assert response.headers["access-control-allow-origin"] == headers["Origin"]
     assert client.options("/api/v1/health").status_code == 401
     assert client.options("/api/v1/health", headers={**headers, "Origin": "https://evil.example"}).status_code == 403
-    assert client.options("/api/v1/health", headers={**headers, "Access-Control-Request-Method": "DELETE"}).status_code == 400
+    assert client.options("/api/v1/health", headers={**headers, "Access-Control-Request-Method": "TRACE"}).status_code == 400
     assert client.options("/api/v1/health", headers={**headers, "Access-Control-Request-Headers": "x-unapproved"}).status_code == 400
 
 

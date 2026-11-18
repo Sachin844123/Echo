@@ -60,8 +60,8 @@ produce no text chunks; extracted pages retain their original page numbers.
 Defaults are 350 lexical tokens with 60 tokens of overlap. Tokens are Unicode
 word runs or punctuation, with long runs split at 32 characters to bound
 pathological words. This is a deterministic, model-free M2 approximation, not
-MiniLM WordPiece tokenization. M3 must account for the embedding model's input
-limit; the research defaults need benchmarking and tuning.
+MiniLM WordPiece tokenization. M3 embeds model-sized overlapping WordPiece
+windows and pools them without truncating the chunk. Defaults need evaluation.
 
 Chunks cross streaming-record boundaries with overlap but never cross a PDF
 page or heading change. Each chunk stores its exact half-open character range
@@ -87,10 +87,11 @@ this is not a claim of constant-memory ingestion or a measured RSS bound.
 3. The coordinator claims the oldest pending job, increments attempts and marks
    it running. Extraction uses a separate short-lived Python process. It
    rechecks the captured hash and writes cleaned records to an app-owned spool.
-4. Publish document + chunks + succeeded status in one SQLite transaction.
-   Failures roll back all partial chunks and persist a safe failure state. No
-   search index is created, so indexed_at stays NULL and source processing
-   status returns to pending. The API's ready_for_indexing means M2 succeeded.
+4. Publish document + chunks + FTS trigger entries + succeeded ingestion status
+   and a pending indexing job in one SQLite transaction. Extraction failures
+   roll back partial chunks. `ready_for_indexing` describes successful ingestion;
+   inspect the separate indexing job/source status for semantic readiness.
+   `indexed_at` is set only after successful FAISS/metadata publication.
 5. Explicit retries transition failed → pending if attempts remain (default
    three total). Successful/running/pending jobs cannot be retried. The input
    file is retained to permit retry; there is no fabricated successful result.
@@ -106,7 +107,10 @@ unfinished work pending when attempts remain. Exhausted interruptions become
 failed. Native-parser crashes and timeouts become visible failures. If SQLite
 itself cannot record a failure (for example disk full), the error is logged
 without private content and a running job may need recovery on the next start.
-This is ingestion recovery only; FTS5/FAISS reconciliation arrives in M3.
+M3 also performs FTS5/FAISS reconciliation and pending-deletion cleanup under the
+same ownership lock. Indexing failures preserve extracted text for explicit retry;
+normal shutdown waits for the current bounded embedding batch to finish. See
+[search operations](search.md) for the indexing lifecycle and recovery commands.
 
 ## Inspection
 

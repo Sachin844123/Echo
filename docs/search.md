@@ -1,4 +1,4 @@
-# Search and index operations — M3
+# Search and index operations — M3 and M5
 
 ECHO searches only imported content. M3 implements retrieval correctness and
 recoverability; it does not establish research accuracy or laptop performance.
@@ -58,6 +58,12 @@ validation with a fixed error message rather than reflecting private input.
 | `keyword` | FTS5 BM25 over chunk text, title and heading; lower raw BM25 ranks first |
 | `semantic` | Inner product over L2-normalized MiniLM vectors; higher cosine similarity ranks first |
 | `hybrid` | Reciprocal Rank Fusion over both ranked candidate lists |
+| `hybrid_contextual` | The same hybrid candidates reranked with normalized metadata/context signals; see [method D](reranking.md) |
+
+For D, optional `context.source_types` and `context.collection_id` supply soft
+ranking hints. Top-level source/date/collection filters still exclude candidates;
+soft hints never do. A–C ignore soft context, and the default mode stays hybrid.
+Weights are configured by `ECHO_RERANK_WEIGHTS`, not supplied in requests.
 
 Keyword terms are literal Unicode word tokens joined with OR. Advanced FTS
 syntax is not accepted; punctuation is not an operator. All FTS column weights
@@ -74,7 +80,9 @@ visible results. These defaults will be benchmarked, not treated as optimal.
 Each result includes source/document/chunk IDs, title, source type, capture
 time, excerpt, page number, heading, half-open character offsets, score and
 component ranks. `score` is negative raw BM25 for keyword, cosine for semantic,
-or RRF for hybrid: scores are not comparable across modes and are not confidence
+or RRF for hybrid. Method D returns a normalized weighted score plus the original
+`rrf_score`, normalized `rerank_signals`, and effective weights/formula version.
+Scores are not comparable across modes and are not confidence
 probabilities. `candidate_counts` reports each pre-grouping list length.
 
 `indexing_incomplete` is true while any active source is pending, processing or

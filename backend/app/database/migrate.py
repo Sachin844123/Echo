@@ -33,6 +33,6 @@ def check_database(engine: Engine) -> None:
             raise RuntimeError("database schema is not current; run python -m app migrate")
         if connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() != 1:
             raise RuntimeError("SQLite foreign key enforcement is required")
-    # Real capability probe, separate in-memory DB: no production FTS table before M3.
+    # Verify the linked SQLite library supports the persistent M3 FTS5 schema.
     with sqlite3.connect(":memory:") as probe:
         probe.execute("CREATE VIRTUAL TABLE fts_probe USING fts5(body)")

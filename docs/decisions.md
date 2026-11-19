@@ -1,5 +1,35 @@
 # Decisions
 
+## M6 — 2026-11-18
+
+1. **Serve the build on the API origin.** React/TypeScript/Vite/Tailwind output
+   is served by FastAPI on loopback. Only the non-sensitive shell/assets are
+   public; all API calls retain bearer authentication. No cloud hosting plugin
+   is needed. Optional Vite HMR uses an explicit additional loopback origin.
+2. **Keep the session in memory.** Paste the existing server token; never embed
+   it in a build, URL, cookie or browser storage. Lock/reload clears the session;
+   unauthorized responses disconnect. Only the theme preference persists.
+3. **Text previews and explicit retrieval.** Render bounded extracted text,
+   use Unicode-aware offsets and no HTML rendering. Expose all four modes;
+   unavailable semantics remains a visible error rather than silent fallback.
+   Hard filters and soft hints stay distinct. Dates are local-day filters.
+4. **Recoverable delete-all.** Validate exact confirmation, tombstone all
+   sources in one transaction, remove collections/settings and reuse existing
+   cleanup/reconciliation. Increment an import generation under the same lock
+   to reject uploads that began before the reset. Keep originals/models and
+   separate evaluation data. No new schema or backend dependencies.
+5. **Minimal frontend dependencies.** Use native fetch with cancellation,
+   native modal dialogs, bounded lists, shared SVGs and local system fonts.
+   Official build plugins/type declarations support the requested stack.
+   Playwright and axe are development-only browser/accessibility tooling;
+   Prettier keeps TypeScript/JSX/CSS consistently readable for review.
+   Pin resolved packages in a lockfile; no UI/router/animation framework.
+6. **Test the actual integration.** Browser tests use a real temporary backend
+   and tiny TEST DATA, not a fake production API. Cover session lifecycle,
+   ingestion, retrieval, collections, deletion, failure/retry, stale searches,
+   keyboard focus, narrow layouts and both themes. Keep browser artifacts
+   ignored. Offline embedding correctness remains in the backend tests.
+
 ## Editor import resolution — 2026-11-18
 
 - Keep `app` rooted in `backend`, matching the supported server launch and

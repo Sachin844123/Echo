@@ -1,5 +1,21 @@
 # Decisions
 
+## M6 development upload fix — 2026-11-19
+
+- A running backend rejected both port-5173 browser origins with 403 while
+  credential-free health requests without Origin returned 401. This supports an
+  early Origin rejection as the cause of the reported Vite upload resets; no
+  user documents or session tokens were read for diagnosis.
+- Use a read-only POST session check for login and before each import batch.
+  Browsers send Origin on POST, exposing misconfiguration before streaming files.
+  Existing per-request security still applies. Keep the production allowlist
+  strict and document the explicit backend restart/configuration required for HMR.
+- Redact Vite's proxy error logger at the configured logger boundary. Preserve
+  visible failures and HTTP status handling without printing private URL query
+  parameters or raw error objects. No dependency or migration is added.
+- Add real proxy transport tests alongside browser guidance/retry tests. Synthetic
+  resets and labelled TEST DATA exercise the failure without opening user files.
+
 ## M6 — 2026-11-18
 
 1. **Serve the build on the API origin.** React/TypeScript/Vite/Tailwind output

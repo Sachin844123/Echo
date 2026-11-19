@@ -1,6 +1,7 @@
 """Stable public error codes; parser exceptions never cross the boundary."""
 
 ERRORS = {
+    "library_reset": "The library was cleared during this import. Import the document again if needed.",
     "invalid_filename": "Provide a plain filename without directory components.",
     "unsupported_type": "Supported formats are PDF, TXT, Markdown and DOCX.",
     "type_mismatch": "File contents do not match the filename extension.",

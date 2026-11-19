@@ -37,6 +37,7 @@ class IngestionService:
         self.process: subprocess.Popen | None = None
         self.thread: threading.Thread | None = None
         self.indexer = None
+        self.import_generation = 0
 
     def start(self) -> None:
         self.instance_lock.acquire()
@@ -77,13 +78,15 @@ class IngestionService:
         self.store.recover_orphans(referenced)
         logger.info("jobs_recovered")
 
-    def enqueue(self, staged: Path, filename: str, digest: str, note_title: str | None = None) -> dict:
+    def enqueue(self, staged: Path, filename: str, digest: str, note_title: str | None = None, expected_generation: int | None = None) -> dict:
         name = safe_filename(filename)
         detected = detect_file(staged, name, self.settings)
         source_type = "note" if note_title is not None else detected
         adopted = None
         try:
             with self.mutation_lock, self.sessions.begin() as session:
+                if expected_generation is not None and expected_generation != self.import_generation:
+                    raise ImportFailure("library_reset", 409)
                 duplicate = session.scalar(select(Source).where(Source.content_hash == digest))
                 if duplicate is not None:
                     if duplicate.is_deleted:

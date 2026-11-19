@@ -45,6 +45,12 @@ export class Api {
       })
       const body = await response.json().catch(() => null)
       if (response.status === 401) this.unauthorized()
+      if (response.status === 403 && body?.detail === 'Origin not allowed')
+        throw new ApiError(
+          403,
+          'origin_not_allowed',
+          'This dashboard address is not allowed by the local server. Open http://127.0.0.1:8000/, or restart the backend with this exact development address in ECHO_ALLOWED_ORIGINS (see frontend/README.md).',
+        )
       if (!response.ok)
         throw new ApiError(
           response.status,

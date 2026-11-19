@@ -59,6 +59,7 @@ def flush_file(stream):
 async def import_file(request: Request, filename: str = Query(min_length=1, max_length=240)):
     name = safe_filename(filename)
     service = request.app.state.ingestion
+    generation = service.import_generation
     staged = service.store.new_stage()
     digest = hashlib.sha256()
     try:
@@ -68,7 +69,7 @@ async def import_file(request: Request, filename: str = Query(min_length=1, max_
                 await run_in_threadpool(stream.write, block)
                 digest.update(block)
             await run_in_threadpool(flush_file, stream)
-        result = await run_in_threadpool(service.enqueue, staged, name, digest.hexdigest())
+        result = await run_in_threadpool(service.enqueue, staged, name, digest.hexdigest(), expected_generation=generation)
         return JSONResponse(result, status_code=200 if result["duplicate"] else 202)
     except OSError:
         raise ImportFailure("storage_error", 503) from None
@@ -78,6 +79,8 @@ async def import_file(request: Request, filename: str = Query(min_length=1, max_
 
 @router.post("/imports/notes")
 async def import_note(request: Request):
+    service = request.app.state.ingestion
+    generation = service.import_generation
     if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
         raise ImportFailure("invalid_note", 415)
     data = bytearray()
@@ -96,7 +99,7 @@ async def import_note(request: Request):
                 stream.write(content)
                 flush_file(stream)
         await run_in_threadpool(save)
-        result = await run_in_threadpool(service.enqueue, staged, "note.txt", hashlib.sha256(content).hexdigest(), note.title.strip())
+        result = await run_in_threadpool(service.enqueue, staged, "note.txt", hashlib.sha256(content).hexdigest(), note.title.strip(), expected_generation=generation)
         return JSONResponse(result, status_code=200 if result["duplicate"] else 202)
     except OSError:
         raise ImportFailure("storage_error", 503) from None

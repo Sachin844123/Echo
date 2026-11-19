@@ -1,4 +1,4 @@
-# Local security model — M1–M5
+# Local security model — M1–M6
 
 ECHO is a single-user local process. The primary boundaries are the HTTP server,
 the local session token and the user's filesystem permissions. It is not a
@@ -30,6 +30,18 @@ multi-user service and has no account system.
   application data. Requests that follow it must authenticate.
 - Responses have no-store, nosniff and generated request IDs. Database health
   errors return 503 and unexpected failures return generic 500 responses.
+- M6 exposes only GET/HEAD `/`, `/favicon.svg` and `/assets/*` without a token.
+  These serve the locally built empty shell and compiled assets, never data or
+  credentials. Every API route remains authenticated. Host/Origin/peer checks
+  also apply to static content. StaticFiles confines asset access to the build.
+- Production responses add a restrictive self-only script/style/connect CSP,
+  no inline scripts/styles, no framing, no referrers and disabled camera,
+  microphone and geolocation permissions. Framework parameter validation is
+  redacted instead of echoing user-supplied values.
+- The dashboard keeps its token and document/query state in tab memory, aborts
+  outstanding requests on lock and locks again on reload. Only a versioned
+  theme preference persists. Previews are React text nodes, never imported HTML.
+  There is no service worker or browser-side content/history cache.
 - Structured logs use a field/event allowlist. Content, queries, URLs, paths,
   tokens, headers, SQL parameters, exception messages and tracebacks are
   excluded. There are no content-bearing access logs or search history.
@@ -76,6 +88,12 @@ multi-user service and has no account system.
 - Deletion commits a hidden tombstone before removing vectors, snapshots, files
   and DB/FTS rows. File/IO failures remain visible as pending deletion and are
   retried by the worker/startup. An in-flight parser cannot republish the source.
+- Delete-all requires an authenticated bounded JSON body with exact confirmation
+  `DELETE ALL`. It atomically tombstones existing sources and clears collections
+  and application settings, then uses the same recoverable deletion mechanism.
+  A generation guard rejects pre-reset uploads that have not yet published;
+  genuinely new imports are allowed. User originals, models and separate
+  evaluation runs remain outside the deleted library.
 
 ## Trust and limitations
 
@@ -119,6 +137,7 @@ Normal server shutdown terminates its active parser and requeues unfinished work
 Deletion does not promise forensic erasure of SQLite pages/WAL, backups or SSD
 blocks. FAISS and its serialization require memory proportional to the index;
 there is no measured RSS guarantee or hard quota. Source/index mutations and
-search are serialized; indexing can delay those requests. Broader request-rate/
-disk quotas, dashboard interactions and delete-all belong to M6. Do not expose
-this service through a proxy or tunnel.
+search are serialized; indexing can delay those requests. Total request-rate,
+disk and memory quotas are not implemented. Do not expose this service through
+a proxy or tunnel. Development HMR uses a separately allowed loopback origin;
+the production build uses the API origin and its strict CSP.

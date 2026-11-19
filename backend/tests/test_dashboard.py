@@ -10,6 +10,18 @@ from app.ingestion.errors import ImportFailure
 from test_search_api import import_note
 
 
+def test_session_check_requires_token_and_exact_origin(client, auth):
+    path = '/api/v1/session/check'
+    assert client.post(path).status_code == 401
+    assert client.post(path, headers={**auth, 'Origin': 'http://127.0.0.1:5173'}).status_code == 403
+    assert client.post(path, headers={**auth, 'Origin': 'null'}).status_code == 403
+    response = client.post(path, headers={**auth, 'Origin': 'http://127.0.0.1:8000'})
+    assert response.status_code == 200
+    assert response.json() == {'status': 'ok'}
+    assert response.headers['cache-control'] == 'no-store'
+    assert client.post(path, headers=auth).status_code == 200  # Native clients still work.
+
+
 def test_public_shell_keeps_every_api_authenticated(client, auth):
     response = client.get('/')
     assert response.status_code in {200, 503}  # Build is optional for backend-only installs.

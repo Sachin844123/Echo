@@ -50,6 +50,10 @@ class LocalSecurityMiddleware:
                     (b"x-request-id", request_id.encode("ascii")),
                     (b"cache-control", b"no-store"),
                     (b"x-content-type-options", b"nosniff"),
+                    (b"referrer-policy", b"no-referrer"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+                    (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
                 ])
                 message = {**message, "headers": response_headers}
             await send(message)
@@ -75,7 +79,11 @@ class LocalSecurityMiddleware:
             # Browser preflight carries no bearer token. It exposes transport policy only;
             # CORSMiddleware handles it without invoking an API route.
             preflight = scope["method"] == "OPTIONS" and valid_origin and b"access-control-request-method" in headers
-            if not preflight:
+            # Only the non-sensitive, locally built shell/assets are public.
+            # No API route, preview, imported file or token is served here.
+            shell = scope["method"] in {"GET", "HEAD"} and (
+                scope["path"] in {"/", "/favicon.svg"} or scope["path"].startswith("/assets/"))
+            if not preflight and not shell:
                 authorization = headers.get(b"authorization", [])
                 if len(authorization) != 1 or len(authorization[0]) > 256:
                     await reject(401, "Valid session token required")

@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from starlette.concurrency import run_in_threadpool
 
 from app.api.search import read_input
+from app.api.search import SourceType
 from app.database.models import Chunk, Collection, CollectionItem, Document, Source
 from app.retrieval.errors import RetrievalFailure
 
@@ -50,19 +51,27 @@ def require_source(session, source_id):
 
 
 @router.get("/sources")
-def sources(request: Request, limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+def sources(request: Request, limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+            collection_id: int | None = Query(default=None, gt=0), source_type: SourceType | None = None):
     service = request.app.state.search
     with service.lock, service.sessions() as session:
-        items = session.scalars(select(Source).where(Source.is_deleted.is_(False)).order_by(Source.id.desc()).limit(limit).offset(offset))
+        conditions = [Source.is_deleted.is_(False)]
+        if collection_id is not None:
+            conditions.append(Source.id.in_(select(CollectionItem.source_id).where(CollectionItem.collection_id == collection_id)))
+        if source_type is not None:
+            conditions.append(Source.source_type == source_type)
+        items = session.scalars(select(Source).where(*conditions).order_by(Source.id.desc()).limit(limit).offset(offset))
         return {"items": [source_data(item) for item in items], "total": session.scalar(
-            select(func.count()).select_from(Source).where(Source.is_deleted.is_(False)))}
+            select(func.count()).select_from(Source).where(*conditions))}
 
 
 @router.get("/sources/{source_id}")
 def source(request: Request, source_id: int):
     service = request.app.state.search
     with service.lock, service.sessions() as session:
-        return source_data(require_source(session, source_id))
+        result = source_data(require_source(session, source_id))
+        result["collection_ids"] = list(session.scalars(select(CollectionItem.collection_id).where(CollectionItem.source_id == source_id)))
+        return result
 
 
 @router.patch("/sources/{source_id}")
@@ -113,7 +122,9 @@ def collections(request: Request, offset: int = Query(default=0, ge=0), limit: i
     service = request.app.state.search
     with service.lock, service.sessions() as session:
         rows = session.scalars(select(Collection).order_by(Collection.id).offset(offset).limit(limit))
-        return {"items": [{"id": row.id, "name": row.name, "description": row.description} for row in rows],
+        counts = dict(session.execute(select(CollectionItem.collection_id, func.count()).join(Source).where(
+            Source.is_deleted.is_(False)).group_by(CollectionItem.collection_id)).all())
+        return {"items": [{"id": row.id, "name": row.name, "description": row.description, "source_count": counts.get(row.id, 0)} for row in rows],
                 "total": session.scalar(select(func.count()).select_from(Collection))}
 
 

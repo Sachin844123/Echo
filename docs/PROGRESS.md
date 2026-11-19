@@ -1,10 +1,107 @@
 # ECHO progress
 
-## Current state — 2026-11-18 (Asia/Calcutta)
+## Current state — 2026-11-19 (Asia/Calcutta)
 
-**M1 through M5 CONTEXTUAL RERANKING are complete and tested. Stopped at the M5 boundary.**
-M1–M4 remain preserved. M6 and optional M7 are unstarted. Stop at the M5
-handoff; M6 needs a subsequent user instruction to continue.
+**M1 through M6 LOCAL API HARDENING + DASHBOARD are complete and tested.**
+Stopped at the M6 boundary. Existing ingestion, retrieval and evaluation are
+preserved. Optional M7 is unstarted and requires explicit authorization.
+
+## M6 delivered — 2026-11-19
+
+- Local React/TypeScript/Vite/Tailwind dashboard: Search, Library, Collections,
+  Sources and Settings; all four retrieval modes, hard filters and soft hints.
+- Sequential file and note imports with duplicate/per-file results; paginated
+  documents/jobs; collection creation, browsing and membership; rename/delete.
+- Bounded text previews, source metadata and Unicode-correct passage highlights;
+  plain text rendering prevents imported markup execution. No fake library data.
+- Light/dark themes, narrow layouts, skip link, Ctrl/Cmd+K, native dialogs with
+  focus return, empty/loading/error states and cancelled stale search requests.
+- Public non-sensitive build shell on the API origin; authenticated data access,
+  memory-only tab tokens, lock/reload/401 handling, theme-only browser storage.
+- CSP/no-framing/no-referrer/permissions headers and redacted FastAPI validation.
+  Safe settings projection and collection counts/filtering for the dashboard.
+- Confirmed delete-all with durable tombstones, cascading cleanup and rejection
+  of pre-reset in-flight uploads. Existing recovery retries unfinished deletion.
+- Applied installed frontend-design, UI UX Pro Max and Vercel React guidance.
+  Dependencies and design choices are recorded in dashboard-design.md. No new
+  backend dependency, schema migration, remote runtime asset or cloud service.
+
+### M6 files
+
+New frontend: package manifest/lock, TypeScript/Vite/Playwright/Prettier configs,
+index.html, local favicon, README; src/{App,ImportDialog,LibraryPage,PreviewPanel,
+SearchPage,SystemPages,components}.tsx, src/{api,types}.ts, src/main.tsx and
+src/styles.css; tests/workspace.spec.ts and tests/serve_backend.py.
+
+New backend: app/api/dashboard.py and tests/test_dashboard.py.
+New documentation: docs/dashboard-design.md.
+Modified: .gitignore, AGENTS.md, CHANGELOG.md, README.md; backend app version,
+api/ingestion.py, api/sources.py, ingestion/errors.py, ingestion/service.py,
+main.py, security/middleware.py and tests/test_api.py; docs/PROGRESS.md,
+docs/decisions.md, docs/schema.md and docs/security-model.md.
+
+### M6 executed verification
+
+- `.venv\Scripts\python.exe -m pytest backend/tests/test_dashboard.py -q --tb=short`:
+  **`13 passed in 16.99s`**. An initial test-client DELETE syntax failure was
+  corrected, not ignored.
+- `.venv\Scripts\python.exe -m pytest -q --tb=short`:
+  **`270 passed in 393.14s (0:06:33)`**, no skips or warnings.
+- In frontend, `npm run build`: TypeScript check and production Vite build
+  passed. Final assets: JavaScript 269.62 kB (81.69 kB gzip), CSS 29.84 kB
+  (6.85 kB gzip). These are build sizes, not latency or memory benchmarks.
+- In frontend, `npm test`: **`8 passed (1.5m)`** using installed Microsoft Edge
+  against a real temporary backend with labelled TEST DATA. All workflow
+  tests reject external browser requests and unhandled browser exceptions.
+  Automated axe WCAG A/AA checks passed in the tested states/themes. Playwright
+  emitted an inherited NO_COLOR/FORCE_COLOR tooling warning, not a test failure.
+- Browser verification found and corrected modal focus return, asynchronous
+  checkbox feedback and ambiguous test/field selectors. Final run passed every
+  case. Reviewed actual light/dark, 375px and populated preview screenshots;
+  screenshot artifacts remain ignored. No user library was altered by tests.
+- `npm run format:check`, `npm audit --audit-level=moderate`, Python `pip check`
+  and `git diff --check` passed. Audit reported **0 vulnerabilities**; Python
+  reported **No broken requirements found**. Local documentation links and
+  lock metadata validated; no runtime data, build artifacts or credentials
+  appear in the publish inventory.
+
+### M6 run commands
+
+From the repository root, with Python dependencies already installed:
+
+```powershell
+Set-Location frontend
+npm ci
+npm run build
+Set-Location ..\backend
+..\.venv\Scripts\python.exe -m app migrate
+$env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
+$env:ECHO_SESSION_TOKEN
+..\.venv\Scripts\python.exe -m app serve
+```
+
+Open http://127.0.0.1:8000/ and enter the displayed token. The token display is
+an explicit local setup action; operational logs never contain it. Stop with
+Ctrl+C. Full backend tests run from root; browser tests run with `npm test`
+from frontend. The frontend README also covers optional local Vite development.
+
+### M6 limits
+
+- Real research documents/labels are still required; UI/test fixtures establish
+  correctness, not retrieval quality. Placeholder reranker weights remain untuned.
+- Semantic methods require the prepared local model. Browser tests deliberately
+  use an absent model to verify failure visibility; backend tests use the actual
+  offline MiniLM model. No runtime download or silent semantic fallback exists.
+- Browser verification used Chromium-based Microsoft Edge; other engines and
+  assistive technologies have not been manually certified. Automated accessibility
+  checks and screenshots are evidence for tested states, not universal compliance.
+- Previews show extracted text, not original-format document layouts. Processing
+  and search retain the existing serialized index lock and can delay each other.
+- Tokens are memory-only, so reload requires reconnecting. Settings exposes server
+  configuration read-only; theme and library/session actions are interactive.
+- Deletion keeps original files, embedding models and separate evaluation runs;
+  it does not erase backups/disk blocks. No encryption, total disk/RSS quota,
+  cloud sync, accounts, packaging, OCR or webpage capture is claimed.
 
 ## Editor import fix — 2026-11-18
 

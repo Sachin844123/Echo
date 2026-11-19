@@ -55,7 +55,7 @@ export function App() {
           setExpired(true)
         })
         return session
-          .request('/api/v1/health')
+          .request('/api/v1/session/check', { method: 'POST' })
           .then(() => {
             setExpired(false)
             setApi(session)

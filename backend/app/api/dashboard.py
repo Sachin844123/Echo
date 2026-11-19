@@ -20,6 +20,16 @@ class DeleteLibraryInput(BaseModel):
     confirmation: Literal["DELETE ALL"]
 
 
+@router.post("/session/check")
+async def check_session():
+    """Check authentication and browser Origin without accepting document content.
+
+    POST makes browsers send Origin, including through the development proxy.
+    The security middleware performs both checks before this handler runs.
+    """
+    return {"status": "ok"}
+
+
 @router.get("/settings")
 def settings(request: Request):
     config = request.app.state.search.settings

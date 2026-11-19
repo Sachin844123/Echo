@@ -79,6 +79,11 @@ export function ImportDialog({
             setBusy(true)
             controller.current = new AbortController()
             try {
+              // Detect an Origin/configuration change before streaming any documents.
+              await api.request('/api/v1/session/check', {
+                method: 'POST',
+                signal: controller.current.signal,
+              })
               if (kind === 'note') {
                 const result = await api.json<ImportResult>(
                   '/api/v1/imports/notes',

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 — 2026-11-19 — M6 local dashboard and API hardening
+
+- Added the local React/TypeScript/Vite/Tailwind dashboard with Search, Library,
+  Collections, Sources, Settings, import dialogs and bounded text previews.
+- Added all retrieval modes/filters/context hints, collection membership,
+  rename, deletion, job status/retry, light/dark themes and keyboard navigation.
+- Added same-origin static serving, memory-only browser sessions, restrictive
+  CSP/security headers and redacted framework parameter-validation responses.
+- Added safe configuration projection, collection browsing/counts and confirmed
+  recoverable delete-all with an in-flight upload generation guard.
+- Added backend security/lifecycle and real-browser workflow/accessibility tests.
+  Fixed dialog focus restoration and asynchronous collection checkbox feedback
+  found during browser verification. No backend dependency or migration added.
+- No research data/results, OCR, webpage capture or M7 work introduced.
+- Verification: 270 backend tests passed; eight real-browser workflows passed,
+  including automated accessibility checks. Production build, type checks,
+  formatting, dependency audits and whitespace checks passed.
+
 ## 0.5.0 — 2026-11-18 — M5 contextual reranking
 
 - Fixed repository-root editor resolution of `app.*` and test-helper imports

@@ -1,8 +1,9 @@
 # ECHO engineering rules
 
-Implement one user-authorized milestone at a time. M1 through M5 are complete
-and tested. Stop at the M5 boundary. Do not begin M6 until the user continues
-after the M5 handoff. Update this status after each milestone.
+Implement one user-authorized milestone at a time. M1 through M6 are complete
+and tested. Stop at the M6 boundary. Do not begin optional M7 without explicit
+authorization.
+Update this status after each milestone.
 Run its tests, fix failures, update docs/PROGRESS.md,
 docs/decisions.md and CHANGELOG.md, then stop.
 

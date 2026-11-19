@@ -80,6 +80,47 @@ test('session token is memory-only, errors are visible, lock and reload clear th
   await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible()
 })
 
+test('rejected browser origin prevents login with actionable guidance', async ({ page }) => {
+  await page.route('**/api/v1/session/check', (route) => {
+    expect(route.request().method()).toBe('POST')
+    return route.fulfill({ status: 403, json: { detail: 'Origin not allowed' } })
+  })
+  await page.goto('/')
+  await page.getByLabel('Session token', { exact: true }).fill(token())
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('ECHO_ALLOWED_ORIGINS')
+  await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible()
+})
+
+test('origin check prevents file transfer and permits retry after configuration is fixed', async ({
+  page,
+}) => {
+  await connect(page)
+  let uploads = 0
+  page.on('request', (request) => {
+    if (request.url().includes('/api/v1/imports/files')) uploads++
+  })
+  await page.route('**/api/v1/session/check', (route) =>
+    route.fulfill({ status: 403, json: { detail: 'Origin not allowed' } }),
+  )
+  await page.getByRole('button', { name: 'Import', exact: true }).click()
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'TEST-DATA-origin.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('TEST DATA origin validation before document transfer.'),
+  })
+  const submit = page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Import documents', exact: true })
+  await submit.click()
+  await expect(page.getByRole('alert')).toContainText('ECHO_ALLOWED_ORIGINS')
+  expect(uploads).toBe(0)
+  await page.unroute('**/api/v1/session/check')
+  await submit.click()
+  await expect(page.getByText('Queued for processing', { exact: true })).toBeVisible()
+  expect(uploads).toBe(1)
+})
+
 test('import, duplicate detection, keyword search, matched preview, rename and single deletion', async ({
   page,
 }) => {

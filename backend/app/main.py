@@ -4,13 +4,16 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import FileResponse, JSONResponse
+from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.health import router
 from app.api.ingestion import router as ingestion_router, import_failure_handler
-from app.core.config import Settings
+from app.core.config import REPO_ROOT, Settings
 from app.database.engine import create_session_factory, create_sqlite_engine
 from app.database.migrate import check_database
 from app.security.middleware import LocalSecurityMiddleware
@@ -20,6 +23,7 @@ from app.api.search import router as search_router, retrieval_failure_handler
 from app.api.sources import router as sources_router
 from app.retrieval.engine import SearchEngine
 from app.retrieval.errors import RetrievalFailure
+from app.api.dashboard import router as dashboard_router
 
 
 logger = logging.getLogger("echo.app")
@@ -70,6 +74,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ingestion_router)
     app.include_router(search_router)
     app.include_router(sources_router)
+    app.include_router(dashboard_router)
     app.add_exception_handler(ImportFailure, import_failure_handler)
     app.add_exception_handler(RetrievalFailure, retrieval_failure_handler)
+
+    async def invalid_request(request, error):
+        # FastAPI's default validation response echoes untrusted parameter input.
+        return JSONResponse({"error": {"code": "invalid_request", "message": "Check the request parameters."}}, status_code=422)
+
+    app.add_exception_handler(RequestValidationError, invalid_request)
+    dashboard = REPO_ROOT / "frontend" / "dist"
+
+    @app.api_route("/", methods=["GET", "HEAD"])
+    def shell():
+        if not (dashboard / "index.html").is_file():
+            return JSONResponse({"detail": "Build the local dashboard with npm run build in frontend."}, status_code=503)
+        return FileResponse(dashboard / "index.html")
+
+    @app.api_route("/favicon.svg", methods=["GET", "HEAD"])
+    def favicon():
+        if not (dashboard / "favicon.svg").is_file():
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        return FileResponse(dashboard / "favicon.svg", media_type="image/svg+xml")
+
+    app.mount("/assets", StaticFiles(directory=dashboard / "assets", check_dir=False), name="assets")
     return app

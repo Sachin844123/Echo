@@ -58,8 +58,10 @@ The supported production flow above needs only one local server. For HMR, start
 the backend on port 8000 with both exact origins explicitly allowed:
 
 ```powershell
+Set-Location C:\Projects\Echo\backend
 $env:ECHO_ALLOWED_ORIGINS = '["http://127.0.0.1:8000","http://127.0.0.1:5173"]'
-# Start ECHO as above in this shell.
+# Keep the existing ECHO_SESSION_TOKEN from this terminal, or generate one as above.
+..\.venv\Scripts\python.exe -m app serve
 ```
 
 Then, in a separate terminal under `frontend`, run `npm run dev` and open
@@ -67,6 +69,27 @@ Then, in a separate terminal under `frontend`, run `npm run dev` and open
 requests to port 8000, preserving bearer authentication and Origin validation.
 Do not expose either server on a network interface. The strict production CSP
 is supplied by FastAPI; development HMR is not the production deployment.
+
+### Upload fails with a Vite connection reset or an Origin error
+
+If the backend was started with its default settings, it only permits the
+port-8000 dashboard origin. A proxied browser GET can succeed without an Origin
+header while an upload POST includes the port-5173 origin and is rejected before
+its body is read. Vite can then report `write ECONNRESET` during the upload.
+
+Stop the backend with Ctrl+C in its terminal, set `ECHO_ALLOWED_ORIGINS` using
+the commands above, and start it again in that same terminal. Environment changes
+do not update a running server. Open **http://127.0.0.1:5173/** exactly;
+`localhost` is a different origin. Alternatively, use the built dashboard at
+**http://127.0.0.1:8000/** with the default allowlist. After updating this code,
+restart the backend and Vite and reload the dashboard to pick up the session check.
+
+Login and import now make an authenticated, body-free `POST /api/v1/session/check`
+so a rejected browser origin is explained before any document is transferred.
+This check does not replace validation on each upload or other API request.
+Vite transport errors remain visible with fixed diagnostics that omit request
+URLs, filenames and raw exception stacks. Other failures, including an unavailable
+backend or interrupted connection, still require their own diagnosis.
 
 ## Verification
 
@@ -94,6 +117,11 @@ backend suite. Tests cover real import/search/collection/delete flows, XSS-safe
 previews, token privacy, stale requests, keyboard focus, theme changes, narrow
 layouts and automated axe accessibility checks. Screenshots and reports are
 Git-ignored. Automated checks do not replace a full assistive-technology audit.
+Proxy tests start additional ephemeral loopback listeners, check authentication
+and exact allowed/denied origins, perform a real tiny TEST DATA upload, and
+simulate an upstream reset to verify redacted diagnostics. The test backend
+explicitly permits the separate test origin on port 8238; production defaults
+remain unchanged.
 
 ## Implementation and limits
 

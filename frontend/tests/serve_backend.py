@@ -20,6 +20,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='echo-browser-TEST-DATA-') as directory:
         data = Path(directory)
         settings = Settings(data_dir=data, port=8237, session_token=os.environ['ECHO_E2E_TOKEN'],
+                            allowed_origins=('http://127.0.0.1:8237', 'http://127.0.0.1:8238'),
                             embedding_model_dir=data / 'missing-model')
         engine = create_sqlite_engine(settings.database_path)
         upgrade_database(engine)

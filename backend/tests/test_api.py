@@ -11,7 +11,7 @@ from app.main import create_app
 def test_health_hits_local_database(client, auth):
     response = client.get("/api/v1/health", headers=auth)
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.5.0", "database": "ok"}
+    assert response.json() == {"status": "ok", "version": "0.6.0", "database": "ok"}
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert len(response.headers["x-request-id"]) == 32

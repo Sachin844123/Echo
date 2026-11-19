@@ -6,8 +6,9 @@ ECHO is a software-only research project exploring how people can find documents
 by describing what they remember. It operates on content the user explicitly
 imports, with local storage and a local API.
 
-The current release implements secure ingestion, keyword/semantic/hybrid
-retrieval, contextual reranking and evaluation with tuning-only weight sweeps.
+The current release includes a local document dashboard, secure ingestion,
+keyword/semantic/hybrid retrieval, contextual reranking and evaluation with
+tuning-only weight sweeps.
 ECHO cannot recover information that was never captured.
 
 [Quick start](#quick-start) · [API](#api) · [Configuration](#configuration) ·
@@ -15,15 +16,15 @@ ECHO cannot recover information that was never captured.
 
 ## Project status
 
-**Version 0.5.0 · Search, evaluation and contextual reranking · Research data awaited**
+**Version 0.6.0 · Local dashboard, retrieval and evaluation · Research data awaited**
 
 | Available now | Planned |
 | --- | --- |
-| Validated document imports and recoverable indexing | Local React dashboard |
-| Keyword, semantic, hybrid and contextual hybrid search | Final dashboard/API hardening |
-| Filters, source management, previews and cross-store deletion | Research findings from user-supplied data |
-| Four-method evaluation and tuning-only weight sweeps | Optional OCR and webpage capture, only on request |
-| Authenticated loopback API and structured logs | |
+| Local React dashboard with search, library and collections | Research findings from user-supplied data |
+| Validated imports, previews and recoverable indexing | Optional OCR and webpage capture, only on request |
+| Keyword, semantic, hybrid and contextual hybrid search | |
+| Four-method evaluation and tuning-only weight sweeps | |
+| Authenticated loopback API, local sessions and recoverable deletion | |
 
 Extraction makes content available to keyword search and queues a separate
 embedding job. A source is fully indexed when `processing_status` is `indexed`.
@@ -88,13 +89,14 @@ The backend uses **Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic and
 SQLite**. PyMuPDF and python-docx provide document extraction; sentence-transformers
 and FAISS provide local semantic retrieval. One coordinator processes ingestion
 and indexing jobs serially. The CPU embedding model is loaded once, on demand.
-The React dashboard belongs to M6.
+The React dashboard is built locally and served by the same FastAPI process.
 
 ## Quick start
 
 ### Requirements
 
 - Python **3.11+** with SQLite FTS5 support.
+- Node **22.12+** and npm to build the dashboard; unnecessary for backend-only use.
 - Windows is the primary development target; commands below use PowerShell.
 - Git to clone the repository; network access for dependency installation and
   the explicit one-time model download. Application runtime stays offline.
@@ -140,21 +142,30 @@ report a visible model error. See [model setup and recovery](docs/search.md).
 
 ### 2. Initialize and start
 
-From the repository root:
+Build the dashboard, then start ECHO. From the repository root:
 
 ```powershell
+Set-Location frontend
+npm ci
+npm run build
+Set-Location ..
 Set-Location backend
 ..\.venv\Scripts\python.exe -m app migrate
 $env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
+$env:ECHO_SESSION_TOKEN
 ..\.venv\Scripts\python.exe -m app serve
 ```
 
-The API listens on **`http://127.0.0.1:8000`**. Stop it with **Ctrl+C**.
+Open **`http://127.0.0.1:8000/`** and paste the displayed token to open the
+dashboard. This is an explicit local setup display, never application logging.
+The token stays in tab memory; reload or **Lock workspace** clears it. Only the
+theme preference persists in browser storage. Stop the server with **Ctrl+C**.
 Migrations are explicit and idempotent; startup rejects missing or outdated
 schemas. Stop the server and back up the data directory before future upgrades.
 
-The token is captured in the shell environment without being printed or saved
-to a file. Generate a fresh token for each session. Restart with a new token to
+The token is captured in the shell environment and is not saved to a file.
+For API-only operation, omit the token display line. Generate a fresh token for
+each server session. Restart with a new token to
 rotate it, then clear the shell copy after stopping:
 
 ```powershell
@@ -200,7 +211,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/v1/health' -Headers $headers
 A healthy response is:
 
 ```json
-{"status":"ok","version":"0.5.0","database":"ok"}
+{"status":"ok","version":"0.6.0","database":"ok"}
 ```
 
 Opening the endpoint in a browser address bar without the token returns `401`.
@@ -316,7 +327,8 @@ subprocesses isolate failures but are not an OS sandbox or a hard memory quota.
 Same-user malicious code and administrators remain outside the local HTTP trust
 boundary. Deletion removes database rows, FTS entries, vectors and owned files;
 interrupted removal is retried. This does not promise forensic erasure of WAL,
-backups or SSD blocks. Broader application hardening remains M6.
+backups or SSD blocks. The dashboard adds restrictive CSP/security headers,
+text-only previews and confirmed delete-all; every API call still needs a token.
 
 Read the [security model](docs/security-model.md) before deploying or extending
 this boundary. The service is intended for local use, not exposure through a
@@ -334,8 +346,9 @@ From the repository root:
 Coverage includes authentication, migrations, input validation, real parsers,
 chunk offsets, concurrent duplicates, retries, FTS synchronization, FAISS
 snapshots, RRF, filters, deletion recovery and real offline-model integration.
-The recorded M1–M5 regression completed with **257 passing tests**, no skips
-and no warnings, on Windows/Python 3.12.6.
+Executed backend/browser results, screenshots reviewed and remaining limits are
+recorded in [Progress and verification](docs/PROGRESS.md). Browser tests use a
+separate temporary library and explicitly labelled TEST DATA.
 
 Tests use temporary databases and explicitly synthetic fixtures. They require
 local loopback sockets. Provision the model above to run the real-model tests;
@@ -390,7 +403,7 @@ discipline and measurement limitations. No real study has been run yet.
 | M3 · Search engine | FTS5, FAISS, keyword/semantic/hybrid retrieval, filters, deletion and reconciliation | Complete |
 | M4 · Evaluation | Labelled-dataset harness, metrics, resource measurements and tuning/test split | Complete; study awaits user data |
 | M5 · Contextual reranking | Configurable normalized signals and tuning-only weight sweeps | Complete |
-| M6 · Dashboard and hardening | Local React dashboard and completed application security flows | Planned |
+| M6 · Dashboard and hardening | Local React dashboard and application security flows | Complete |
 | M7 · Optional extensions | OCR, webpage capture and packaging notes | Only on request |
 
 Development proceeds one milestone at a time. Desktop packaging, browser
@@ -429,9 +442,14 @@ evaluation/
   weights.example.json    Untuned example settings and RRF-only ablation
   README.md               Dataset and measurement protocol
 docs/                     Design, security and implementation records
+frontend/
+  src/                    Local React dashboard and shared API client
+  tests/                  Real-browser workflows and temporary backend launcher
+  package-lock.json       Reproducible frontend dependencies
 ```
 
-The frontend will be introduced in M6.
+See the [dashboard guide](frontend/README.md) for UI workflows, local development,
+browser tests, security boundaries and the same-origin production build.
 
 ## Documentation
 
@@ -444,6 +462,8 @@ The frontend will be introduced in M6.
 | [Search specification](docs/search.md) | Retrieval, model setup, filters, source APIs and recovery |
 | [Contextual reranking](docs/reranking.md) | Normalized signals, soft hints, method D and tuning-only sweeps |
 | [Security model](docs/security-model.md) | Implemented protections and trust boundaries |
+| [Local dashboard](frontend/README.md) | Build/run commands, UI workflows, browser tests and limitations |
+| [Dashboard design](docs/dashboard-design.md) | Layout, tokens, accessibility and dependency rationale |
 | [Evaluation guide](evaluation/README.md) | Dataset contract, scoring, measurements and held-out protocol |
 | [Changelog](CHANGELOG.md) | Versioned development history |
 | [Contributor instructions](AGENTS.md) | Repository workflow and scope constraints |

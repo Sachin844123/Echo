@@ -6,6 +6,38 @@
 Stopped at the M6 boundary. Existing ingestion, retrieval and evaluation are
 preserved. Optional M7 is unstarted and requires explicit authorization.
 
+## M6 development upload correction — 2026-11-19
+
+- Diagnosed the reported Vite `write ECONNRESET`: the running backend returned
+  403 for both port-5173 browser origins and 401 without Origin in credential-free
+  probes. Early rejection during body transfer is consistent with the reported
+  reset. The app terminal tool was unavailable; no private documents were read.
+- Added authenticated POST session validation at login and before import, clear
+  Origin-error guidance and retry without discarding the selected files.
+- Redacted Vite proxy transport diagnostics so filenames, URLs and raw errors
+  are not printed. Strict token and exact-Origin checks remain enforced.
+- Changed backend app/api/dashboard.py and tests/test_dashboard.py; frontend
+  src/{App,ImportDialog}.tsx, src/api.ts, vite.config.ts, tests/serve_backend.py,
+  tests/workspace.spec.ts and README.md; added tests/proxy.spec.ts. Updated
+  this progress record, decisions.md, security-model.md and CHANGELOG.md.
+- Executed from the repository root:
+  `.venv\Scripts\python.exe -m pytest backend/tests/test_dashboard.py backend/tests/test_api.py -q --tb=short`
+  returned **44 passed in 24.88s**. The previous 270-test full-suite result below
+  remains the M6 baseline; this correction used focused backend regression tests.
+- Executed under frontend: `npm run build`, `npm run typecheck` and
+  `npm run format:check` passed; `npm test` returned **12 passed (43.5s)**.
+  One initial test used an ambiguous button locator; scoped it to the dialog
+  and reran the entire browser/proxy suite successfully. The existing Node
+  NO_COLOR/FORCE_COLOR environment warning is unrelated to test outcomes.
+- Real proxy checks cover allowed upload, denied Origin, missing token and
+  simulated upstream reset with redacted diagnostics. Browser tests cover
+  pre-upload rejection, retained selection and successful retry. All use tiny
+  labelled TEST DATA in a separate temporary library.
+- No dependencies or migrations added. Existing user servers were not restarted
+  or reconfigured. To apply: stop the backend, set the exact Vite origin in
+  ECHO_ALLOWED_ORIGINS, restart it, restart Vite and reload the dashboard using
+  the commands in frontend/README.md. Environment changes require a restart.
+
 ## M6 delivered — 2026-11-19
 
 - Local React/TypeScript/Vite/Tailwind dashboard: Search, Library, Collections,

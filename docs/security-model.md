@@ -24,6 +24,11 @@ multi-user service and has no account system.
   null origins, userinfo, nonlocal hosts, non-HTTP schemes, paths, queries and
   fragments are rejected. Native clients may omit Origin but still need the
   token. Origin and CORS are additional browser boundaries, not authentication.
+- Login and import use an authenticated, body-free POST session check so browsers
+  send Origin before document transfer. The Vite proxy preserves Origin and token
+  checks. Development requires explicitly allowing its exact loopback origin
+  before backend startup; no Origin rewriting or broad default allowance is used.
+  Proxy transport diagnostics omit request URLs, filenames and raw error stacks.
 - CORS allows GET/POST/PATCH/PUT/DELETE and Authorization/Content-Type, no credential cookies. A
   validated browser preflight may be unauthenticated because browsers do not
   send bearer credentials on preflight. It invokes no route and exposes no

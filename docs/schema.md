@@ -5,6 +5,9 @@ database at each new run's `corpus/echo.sqlite3` using this same schema. Its
 versioned dataset/report JSON contracts are documented in the evaluation guide.
 M5 context hints and weights are request/configuration data, not persisted rows.
 Existing source titles, chunk headings and collection memberships supply signals.
+M6 also adds no migration. Dashboard settings are a read-only configuration
+projection. Delete-all uses existing source tombstones/cascades and clears
+collections and app_settings; its upload-generation guard is process-local.
 
 All required values are NOT NULL unless marked nullable below. Integer entity
 IDs use SQLite AUTOINCREMENT so deleted IDs cannot be reassigned. This matters

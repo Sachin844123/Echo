@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — M6 development upload fix
+
+- Detect a rejected browser origin at login and before streaming imports, with
+  clear guidance for the exact Vite origin and required backend restart.
+- Preserve strict Origin/token validation; redact filenames and raw exceptions
+  from Vite proxy transport diagnostics.
+- Add backend session-check, browser retry and real Vite proxy regression tests.
+  No dependency, migration or optional milestone work added.
+- Verification: 44 focused backend tests and 12 browser/proxy tests passed;
+  production build, type checking and formatting passed.
+
 ## 0.6.0 — 2026-11-19 — M6 local dashboard and API hardening
 
 - Added the local React/TypeScript/Vite/Tailwind dashboard with Search, Library,

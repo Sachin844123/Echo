@@ -1,4 +1,4 @@
-# Schema — revision 0003_images
+# Schema — revision 0004_local_storage
 
 M4 and M5 change no application tables or migrations. Evaluation creates a separate
 database at each new run's `corpus/echo.sqlite3` using this same schema. Its
@@ -10,6 +10,8 @@ projection. Delete-all uses existing source tombstones/cascades and clears
 collections and app_settings; its upload-generation guard is process-local.
 M7 adds the `image` source type, the `visual` job stage and image embedding
 metadata. Existing text embedding records and chunk IDs stay valid.
+Local storage indexing adds persisted consent and references from approved paths
+to existing sources. Previously captured sources are marked as manual.
 
 All required values are NOT NULL unless marked nullable below. Integer entity
 IDs use SQLite AUTOINCREMENT so deleted IDs cannot be reassigned. This matters
@@ -18,7 +20,9 @@ CASCADE and have a leading index (including unique/primary indexes).
 
 | Table | Columns and purpose |
 | --- | --- |
-| sources | id; source_type; title; original_url (nullable); file_path (nullable); mime_type; unique content_hash; captured_at; indexed_at (nullable); processing_status; is_deleted; created_at; updated_at |
+| sources | id; source_type; title; original_url (nullable); file_path (nullable); mime_type; unique content_hash; captured_at; indexed_at (nullable); processing_status; is_deleted; manual_capture; created_at; updated_at |
+| local_access | Singleton consent row with mode, run state, approved roots, exclusions and extensions; timestamps |
+| local_files | Normalized path PK; source_id FK; size_bytes; mtime_ns; file identity; timestamps |
 | documents | id; unique source_id FK; extracted_text; language (nullable); extraction_method; extraction_status; content_length; created_at |
 | chunks | id; document_id FK; chunk_index; chunk_text; token_count; page_number (nullable); heading (nullable); start_offset; end_offset; created_at |
 | embedding_records | id; unique chunk_id FK; model_name; model_version; unique vector_index_id; dimension; content_hash; created_at |

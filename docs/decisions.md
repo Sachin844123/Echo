@@ -1,5 +1,24 @@
 # Decisions
 
+## Local file access and automatic indexing
+
+- Require an explicit persisted permission choice. On Windows, discover fixed
+  drives through the OS and use known folders for personal access. Snapshot
+  granted roots so a new drive does not expand prior consent automatically.
+- Keep a separate path-to-source mapping with size, timestamp and identity.
+  Publish the mapping in the ingestion transaction and retain deduplication by
+  source content hash. Track manual ownership so revocation preserves manual
+  copies. Use durable tombstones for deleted or no-longer-approved sources.
+- Let one scanning worker feed the bounded ingestion queue. Use watchdog's
+  native Windows notifications without its automatic subtree traversal. Reuse
+  the permission-checked `os.scandir` routine for new directories, and reconcile
+  periodically to account for missed notifications.
+- Validate every path component and the final opened file before reading. Skip
+  reparse points and hard links. Block known sensitive locations and recognizable
+  key material, and expose only aggregate safe errors in the Storage page.
+- Cap automatic storage and leave manual uploads available at all access levels.
+  Batch physical cleanup during bulk revocation without changing ranking.
+
 ## Direct local startup and Windows launcher — 2026-11-24
 
 - Remove manual authentication from the dashboard. A guarded same-origin

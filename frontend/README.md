@@ -4,26 +4,26 @@ React, TypeScript, Vite and Tailwind. The production build is served by the
 existing FastAPI process at `http://127.0.0.1:8000/`. No cloud service, remote
 assets, account system or runtime network dependency is involved.
 
-## Build and run (PowerShell)
+## Build and run on Windows
 
-Node 22.12+ is required; this workspace uses Node 24.11.1. From the repository root:
+After completing the backend setup, double-click `Run-ECHO.bat` from the
+repository root. It builds the dashboard if needed, migrates the database,
+starts the local server and opens your browser to the workspace. Stop it with
+Ctrl+C in the launcher window. Use `Run-ECHO.bat --build` after frontend edits
+to rebuild an existing dashboard. Building requires Node 22.12+.
+
+The equivalent manual commands are:
 
 ```powershell
 Set-Location frontend
 npm ci
 npm run build
 Set-Location ..\backend
-..\.venv\Scripts\python.exe -m app migrate
-$env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
-$env:ECHO_SESSION_TOKEN
-..\.venv\Scripts\python.exe -m app serve
+..\.venv\Scripts\python.exe -m app launch
 ```
 
-Open `http://127.0.0.1:8000/` and paste the displayed session token. Printing it
-here is an explicit local setup action, never application logging. Close or
-reload the page to clear its session, or use **Lock workspace**. Keep the same
-server token until that process stops. API responses and previews remain
-authenticated; only the empty shell and compiled assets are public.
+The workspace opens directly. The dashboard establishes its local session
+automatically and keeps it in memory. API calls and previews still authenticate.
 
 Build again after frontend edits. Backend-only installations still support the
 API; the root URL returns a safe setup message until the dashboard is built.
@@ -42,7 +42,7 @@ Keywords remain available when the local model is absent.
   documents. Add/remove documents through their preview.
 - **Sources:** extraction/indexing activity, explicit failures and eligible
   retries. Counts come from the local API, never fabricated sample data.
-- **Settings:** theme, session lock, read-only server configuration and confirmed
+- **Settings:** theme, read-only server configuration and confirmed
   delete-all. Search history remains off. Only `echo.theme.v1` persists in browser
   storage; tokens, queries, titles and document content do not.
 
@@ -63,13 +63,13 @@ the backend on port 8000 with both exact origins explicitly allowed:
 ```powershell
 Set-Location C:\Projects\Echo\backend
 $env:ECHO_ALLOWED_ORIGINS = '["http://127.0.0.1:8000","http://127.0.0.1:5173"]'
-# Keep the existing ECHO_SESSION_TOKEN from this terminal, or generate one as above.
 ..\.venv\Scripts\python.exe -m app serve
 ```
 
 Then, in a separate terminal under `frontend`, run `npm run dev` and open
 `http://127.0.0.1:5173/`. The loopback-only, strict-port Vite server proxies API
-requests to port 8000, preserving bearer authentication and Origin validation.
+requests and dashboard startup to port 8000, preserving bearer authentication
+and Origin validation.
 Do not expose either server on a network interface. The strict production CSP
 is supplied by FastAPI; development HMR is not the production deployment.
 
@@ -87,8 +87,9 @@ do not update a running server. Open **http://127.0.0.1:5173/** exactly;
 **http://127.0.0.1:8000/** with the default allowlist. After updating this code,
 restart the backend and Vite and reload the dashboard to pick up the session check.
 
-Login and import now make an authenticated, body-free `POST /api/v1/session/check`
-so a rejected browser origin is explained before any document is transferred.
+Startup checks the exact browser origin before opening the workspace. Import
+also makes an authenticated, body-free `POST /api/v1/session/check` before
+transferring files.
 This check does not replace validation on each upload or other API request.
 Vite transport errors remain visible with fixed diagnostics that omit request
 URLs, filenames and raw exception stacks. Other failures, including an unavailable

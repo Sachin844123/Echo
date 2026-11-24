@@ -25,7 +25,7 @@ export class Api {
     this.pending.forEach((c) => c.abort())
     this.pending.clear()
   }
-  async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(path: string, options: RequestInit = {}, binary = false): Promise<T> {
     if (this.disposed) throw new DOMException('Session closed', 'AbortError')
     if (!path.startsWith('/api/v1/')) throw new Error('Invalid API path')
     const controller = new AbortController()
@@ -43,7 +43,8 @@ export class Api {
         referrerPolicy: 'no-referrer',
         headers: { ...options.headers, Authorization: `Bearer ${this.token}` },
       })
-      const body = await response.json().catch(() => null)
+      const body =
+        response.ok && binary ? await response.blob() : await response.json().catch(() => null)
       if (response.status === 401) this.unauthorized()
       if (response.status === 403 && body?.detail === 'Origin not allowed')
         throw new ApiError(

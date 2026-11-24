@@ -1,8 +1,9 @@
 # ECHO engineering rules
 
-Implement one user-authorized milestone at a time. M1 through M6 are complete
-and tested. Stop at the M6 boundary. Do not begin optional M7 without explicit
-authorization.
+Implement one user-authorized milestone at a time. M1 through M6 and the
+authorized M7 scope (OCR, imported image search and retrieval coverage) are
+complete and tested. React Bits is the separate requested dashboard update.
+Webpage capture and packaging remain unstarted.
 Update this status after each milestone.
 Run its tests, fix failures, update docs/PROGRESS.md,
 docs/decisions.md and CHANGELOG.md, then stop.

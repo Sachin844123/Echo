@@ -180,9 +180,10 @@ The lock file records the full resolved environment including transitive
 versions. It is not a hash-verified supply-chain lock. Activating the virtual
 environment is optional — commands below use the explicit interpreter path.
 
-**VS Code users:** open the `Echo` repository folder. Workspace settings
-default to `.venv`; `pyproject.toml` configures Pylance/Pyright for `app.*`
-imports. If VS Code selected a different interpreter, run
+**VS Code and Antigravity users:** open the `Echo` repository folder. Workspace
+settings point to `.venv\Scripts\python.exe` on Windows. `pyproject.toml`
+configures Pylance/Pyright for `app.*` imports. If the editor already selected
+a different interpreter, run
 **Python: Select Interpreter → `.venv\Scripts\python.exe`**, then
 **Developer: Reload Window**. Do not disable import diagnostics or rewrite
 backend imports to remove editor underlines. See the

@@ -24,9 +24,8 @@ Set-Location ..\backend
 ..\.venv\Scripts\python.exe -m app serve
 ```
 
-Use the current `ECHO_SESSION_TOKEN` in the backend terminal, or generate one
-as in the [main quick start](../README.md#quick-start). Open `http://127.0.0.1:8000/`
-and sign in. Back up `.local` with the server stopped before upgrading your
+Open `http://127.0.0.1:8000/` to go straight to the workspace, or start it with
+`Run-ECHO.bat`. Back up `.local` with the server stopped before upgrading your
 library. The model commands preserve existing setup and refuse to overwrite
 their destination. They download public assets during setup only. PyMuPDF
 uses local Tesseract language data, and CLIP's approximately 605 MB model

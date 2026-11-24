@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.ingestion.errors import ImportFailure
 
-OWNED_IMPORT = re.compile(r"[0-9a-f]{32}\.(pdf|txt|md|docx)")
+OWNED_IMPORT = re.compile(r"[0-9a-f]{32}\.(pdf|txt|md|docx|image)")
 OWNED_STAGE = re.compile(r"[0-9a-f]{32}\.(part|jsonl)")
 
 
@@ -28,7 +28,7 @@ class FileStore:
         return self.staging / f"{uuid.uuid4().hex}.{suffix}"
 
     def adopt(self, staged: Path, source_type: str) -> str:
-        suffix = {"pdf": "pdf", "docx": "docx", "markdown": "md", "txt": "txt", "note": "txt"}[source_type]
+        suffix = {"pdf": "pdf", "docx": "docx", "markdown": "md", "txt": "txt", "note": "txt", "image": "image"}[source_type]
         relative = f"imports/{uuid.uuid4().hex}.{suffix}"
         staged.replace(self.resolve(relative))
         return relative

@@ -3,7 +3,7 @@ import { createServer as createHttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { test, expect } from '@playwright/test'
 import { createLogger, createServer } from 'vite'
-import { safeProxyLogger } from '../vite.config'
+import { localProxyPath, safeProxyLogger } from '../vite.config'
 
 async function proxy(target: string, messages: unknown[] = []) {
   const logger = createLogger('silent')
@@ -18,7 +18,7 @@ async function proxy(target: string, messages: unknown[] = []) {
       host: '127.0.0.1',
       port: 0,
       hmr: false,
-      proxy: { '/api': { target, changeOrigin: true } },
+      proxy: { [localProxyPath]: { target, changeOrigin: true } },
     },
   })
   await server.listen()
@@ -30,15 +30,20 @@ test('Vite preserves token and exact Origin checks, and forwards an allowed uplo
   request,
 }) => {
   const { server, url } = await proxy('http://127.0.0.1:8237')
-  const authorization = { Authorization: `Bearer ${process.env.ECHO_E2E_TOKEN!}` }
   try {
     expect((await request.post(`${url}/api/v1/session/check`)).status()).toBe(401)
-    const denied = await request.post(`${url}/api/v1/session/check`, {
-      headers: { ...authorization, Origin: 'http://127.0.0.1:5173' },
+    const browser = { 'Sec-Fetch-Site': 'same-origin', 'X-Echo-Dashboard': '1' }
+    const denied = await request.post(`${url}/session/open`, {
+      headers: { ...browser, Origin: 'http://127.0.0.1:5173' },
     })
     expect(denied.status()).toBe(403)
     expect(await denied.json()).toEqual({ detail: 'Origin not allowed' })
-    const headers = { ...authorization, Origin: 'http://127.0.0.1:8238' }
+    const origin = { Origin: 'http://127.0.0.1:8238' }
+    const bootstrap = await request.post(`${url}/session/open`, {
+      headers: { ...browser, ...origin },
+    })
+    expect(bootstrap.status()).toBe(200)
+    const headers = { ...origin, Authorization: `Bearer ${(await bootstrap.json()).session}` }
     const allowed = await request.post(`${url}/api/v1/session/check`, { headers })
     expect(allowed.status()).toBe(200)
     const upload = await request.post(`${url}/api/v1/imports/files?filename=TEST-DATA-proxy.txt`, {

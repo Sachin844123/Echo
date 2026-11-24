@@ -1,5 +1,76 @@
 @import 'tailwindcss';
 
+.storage-form {
+  display: grid;
+  gap: 14px;
+}
+.permission-choices {
+  display: grid;
+  gap: 8px;
+}
+.permission-choices legend,
+.storage-type-list legend {
+  margin-bottom: 8px;
+  font-weight: 650;
+}
+.permission-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.permission-choice:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.permission-choice input {
+  width: 16px;
+  min-height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+.permission-choice small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.storage-type-list,
+.storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.storage-paths,
+.storage-files {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.storage-paths li {
+  padding: 4px 0;
+}
+.storage-page h3 {
+  margin-top: 12px;
+  font-weight: 650;
+}
+.storage-files li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.storage-files li > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 .image-preview {
   display: block;
   width: 100%;

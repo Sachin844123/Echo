@@ -12,7 +12,7 @@ from app.core.config import RerankWeights
 
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")]
 Grade = Annotated[StrictInt, Field(ge=0, le=3)]
-SourceType = Literal["pdf", "txt", "markdown", "docx", "note"]
+SourceType = Literal["pdf", "txt", "markdown", "docx", "note", "image"]
 
 
 class EvaluationError(Exception):
@@ -24,7 +24,7 @@ class StrictModel(BaseModel):
 
 
 class Filters(StrictModel):
-    source_types: list[SourceType] = Field(default_factory=list, max_length=5)
+    source_types: list[SourceType] = Field(default_factory=list, max_length=6)
     captured_from: datetime | None = None
     captured_to: datetime | None = None
     collection: Identifier | None = None
@@ -63,7 +63,7 @@ class DocumentSpec(StrictModel):
 
 
 class QueryContext(StrictModel):
-    source_types: list[SourceType] = Field(default_factory=list, max_length=5)
+    source_types: list[SourceType] = Field(default_factory=list, max_length=6)
     collection: Identifier | None = None
 
 
@@ -136,6 +136,13 @@ class Dataset(StrictModel):
 
 
 class RunConfig(StrictModel):
+    # Preserve the previous evaluation baseline when loading old frozen configs.
+    retrieval_profile: Literal["classic", "source_balanced"] = "classic"
+    spelling_correction: bool = False
+    candidate_scan_limit: int = Field(default=2000, ge=200, le=10000)
+    ocr_enabled: bool = False
+    ocr_languages: str = Field(default="eng", pattern=r"^[a-z]{3}(?:\+[a-z]{3}){0,3}$")
+    ocr_dpi: int = Field(default=200, ge=100, le=300)
     chunk_tokens: int = Field(default=350, ge=10, le=2000)
     chunk_overlap: int = Field(default=60, ge=0, le=1000)
     candidate_pool: int = Field(default=50, ge=10, le=200)

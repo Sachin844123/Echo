@@ -12,21 +12,22 @@ from app.api.ingestion import body_blocks
 from app.retrieval.errors import MESSAGES, RetrievalFailure
 
 router = APIRouter(prefix="/api/v1")
-SourceType = Literal["pdf", "txt", "markdown", "docx", "note"]
+SourceType = Literal["pdf", "txt", "markdown", "docx", "note", "image"]
 
 
 class SearchContext(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
-    source_types: list[SourceType] = Field(default_factory=list, max_length=5)
+    source_types: list[SourceType] = Field(default_factory=list, max_length=6)
     collection_id: int | None = Field(default=None, gt=0)
 
 
 class SearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     query: str = Field(min_length=1, max_length=2000)
-    mode: Literal["keyword", "semantic", "hybrid", "hybrid_contextual"] = "hybrid"
+    mode: Literal["keyword", "semantic", "hybrid", "hybrid_contextual", "visual"] = "hybrid"
     limit: int | None = Field(default=None, ge=1, le=50)
-    source_types: list[SourceType] = Field(default_factory=list, max_length=5)
+    correct_spelling: bool | None = None
+    source_types: list[SourceType] = Field(default_factory=list, max_length=6)
     captured_from: datetime | None = None
     captured_to: datetime | None = None
     collection_id: int | None = Field(default=None, gt=0)

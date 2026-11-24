@@ -3,8 +3,8 @@
 > **Local-first document memory and retrieval research.**
 
 ECHO is a software-only research project exploring how people can find documents
-by describing what they remember. It operates exclusively on content the user
-explicitly imports, with all storage and processing kept local. No cloud sync,
+by describing what they remember. It searches manually imported content and
+eligible files in folders the user approves. Storage and processing stay local. No cloud sync,
 no external AI calls, no telemetry.
 
 ECHO ships a local React dashboard, four text retrieval modes, visual image
@@ -31,6 +31,7 @@ search, OCR and a reproducible evaluation harness with tuning-only weight sweeps
 | Validated imports, previews and recoverable indexing pipeline | React Bits dashboard update |
 | Keyword, semantic, hybrid and contextual-hybrid retrieval | Webpage capture and packaging require separate authorization |
 | OCR for scanned PDFs and PNG/JPEG, plus visual image search | |
+| Opt-in folder monitoring and automatic indexing on Windows | |
 | Four-method evaluation harness with tuning-only weight sweeps | |
 | Authenticated loopback API, local sessions and recoverable deletion | |
 
@@ -44,8 +45,10 @@ reaches `indexed`. The research evaluation awaits a user-supplied labelled datas
 
 ### Capture and ingestion
 
-- **Explicit capture only.** Import selected files or write a manual note. ECHO
-  does not scan folders, monitor browsing, or retrieve external content.
+- **Capture with consent.** Import files, write a note, or grant access to local
+  folders in [Storage & Permissions](docs/local-storage.md). New and changed
+  files are indexed through the same pipeline. Revoke access to purge automatic
+  copies and keep manual imports.
 - **Validated inputs.** File contents are inspected, size limits enforced, unsafe
   DOCX archives rejected, and user-supplied filenames kept out of storage paths.
 - **Document preparation.** Text is extracted and normalized while preserving PDF
@@ -112,6 +115,7 @@ normalization rules and recovery behavior.
 ```mermaid
 flowchart LR
     A[Explicit file or note import] --> B[Validate and hash]
+    Q[Opt-in folder scan or change notification] --> B
     B --> C[Local file storage]
     C --> D[Persistent SQLite job]
     D --> E[Isolated parser process]
@@ -195,7 +199,8 @@ the script builds the dashboard if needed, then initializes or migrates the
 database and opens [ECHO on loopback](http://127.0.0.1:8000/). The launcher
 prints the address if you use a different port.
 
-The workspace opens directly. Keep the launcher window open while using ECHO
+The workspace opens directly. On the first visit, choose a storage access level
+or deny access to use manual imports only. Keep the launcher window open while using ECHO
 and press **Ctrl+C** there to stop it. After frontend edits, run
 `.\Run-ECHO.bat --build` to rebuild the dashboard. See the
 [dashboard guide](frontend/README.md) for a manual build or Vite development setup.
@@ -278,6 +283,11 @@ contract is exercised by the backend test suite.
 | `DELETE` | `/api/v1/collections/{id}` | Delete a collection (sources are retained) |
 | `PUT` / `DELETE` | `/api/v1/collections/{id}/sources/{source_id}` | Add or remove a source from a collection |
 | `DELETE` | `/api/v1/library` | Delete library contents with an explicit `DELETE ALL` confirmation |
+| `GET` | `/api/v1/storage` | Read local storage consent, folders and indexing progress |
+| `GET` | `/api/v1/storage/options` | Read fixed-drive and personal-folder options |
+| `GET` | `/api/v1/storage/files` | List tracked files, with pagination |
+| `PUT` | `/api/v1/storage/permission` | Set consent, approved folders, exclusions and file type filters |
+| `POST` | `/api/v1/storage/control` | Pause, resume, cancel or rescan |
 
 ### Examples
 
@@ -555,6 +565,7 @@ grading rules, split discipline and measurement limitations.
 | **M6 · Dashboard and hardening** | Local React dashboard, API security hardening, real-browser tests | ✅ Complete |
 | **M7 · OCR and image retrieval** | Scanned PDFs, text and visual image search, retrieval coverage | Implemented. See [progress](docs/PROGRESS.md). |
 | **Windows startup** | Direct dashboard access and `Run-ECHO.bat` | Complete |
+| **Local file access** | Opt-in Windows discovery, monitoring and incremental indexing | See [progress](docs/PROGRESS.md) |
 | **Dashboard follow-up** | React Bits integration | Planned |
 
 Development proceeds one milestone at a time. The following are **out of scope**
@@ -626,6 +637,7 @@ same-origin production build.
 | [Contextual reranking](docs/reranking.md) | Normalized signals, soft context hints, method D details and tuning-only sweeps |
 | [Security model](docs/security-model.md) | Implemented protections, trust boundaries and known limitations |
 | [Local dashboard](frontend/README.md) | Build/run commands, UI workflows, browser test suite and known limitations |
+| [Storage & Permissions](docs/local-storage.md) | Consent modes, automatic indexing, revocation and boundaries |
 | [Dashboard design](docs/dashboard-design.md) | Layout system, design tokens, accessibility and dependency rationale |
 | [Evaluation guide](evaluation/README.md) | Dataset format, grading, split discipline, metric definitions and measurement limitations |
 | [Changelog](CHANGELOG.md) | Versioned development history by milestone |

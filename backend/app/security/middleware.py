@@ -53,7 +53,7 @@ class LocalSecurityMiddleware:
                     (b"referrer-policy", b"no-referrer"),
                     (b"x-frame-options", b"DENY"),
                     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-                    (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
+                    (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
                 ])
                 message = {**message, "headers": response_headers}
             await send(message)

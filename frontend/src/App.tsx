@@ -5,6 +5,8 @@ import { SearchPage } from './SearchPage'
 import { LibraryPage, CollectionsPage } from './LibraryPage'
 import { SourcesPage, SettingsPage } from './SystemPages'
 import { ImportDialog } from './ImportDialog'
+import { StorageConsent, StoragePage } from './StoragePage'
+import type { StorageStatus } from './StoragePage'
 import type { AppSettings, IndexStatus, View } from './types'
 
 const nav: { view: View; icon: string }[] = [
@@ -12,6 +14,7 @@ const nav: { view: View; icon: string }[] = [
   { view: 'Library', icon: 'library' },
   { view: 'Collections', icon: 'folder' },
   { view: 'Sources', icon: 'sources' },
+  { view: 'Storage', icon: 'folder' },
   { view: 'Settings', icon: 'settings' },
 ]
 function initialTheme(): 'light' | 'dark' {
@@ -26,19 +29,26 @@ function initialTheme(): 'light' | 'dark' {
 export function App() {
   const [theme, setTheme] = useState(initialTheme)
   const [api, setApi] = useState<Api | null>(null)
+  const [storage, setStorage] = useState<StorageStatus>()
   const [startupError, setStartupError] = useState('')
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     const client = new Api()
     let active = true
-    void client.start().then(
-      () => {
-        if (active) setApi(client)
-      },
-      (error) => {
-        if (active) setStartupError(errorText(error))
-      },
-    )
+    void client
+      .start()
+      .then(() => client.request<StorageStatus>('/api/v1/storage'))
+      .then(
+        (value) => {
+          if (active) {
+            setStorage(value)
+            setApi(client)
+          }
+        },
+        (error) => {
+          if (active) setStartupError(errorText(error))
+        },
+      )
     return () => {
       active = false
       client.dispose()
@@ -53,8 +63,8 @@ export function App() {
     }
   }, [theme])
   const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'))
-  return api ? (
-    <Workspace api={api} theme={theme} toggleTheme={toggleTheme} />
+  return api && storage ? (
+    <Workspace api={api} theme={theme} toggleTheme={toggleTheme} storage={storage} />
   ) : (
     <main className="workspace-startup">
       <Brand />
@@ -76,10 +86,12 @@ function Workspace({
   api,
   theme,
   toggleTheme,
+  storage,
 }: {
   api: Api
   theme: string
   toggleTheme: () => void
+  storage: StorageStatus
 }) {
   const [view, setView] = useState<View>('Search')
   const [revision, setRevision] = useState(0)
@@ -88,6 +100,8 @@ function Workspace({
   const [status, setStatus] = useState<IndexStatus>()
   const [statusError, setStatusError] = useState('')
   const [notice, setNotice] = useState('')
+  const [storageStatus, setStorageStatus] = useState(storage)
+  const [onboarding, setOnboarding] = useState(storage.mode === null)
   const heading = useRef<HTMLHeadingElement>(null)
   const settings = useGet<AppSettings>(api, '/api/v1/settings', revision)
   const refresh = useCallback(() => setRevision((r) => r + 1), [])
@@ -223,15 +237,22 @@ function Workspace({
           <header className="page-heading">
             <div>
               <h1 ref={heading} tabIndex={-1}>
-                {view === 'Search' ? 'Find it again.' : view === 'Library' ? 'Your library' : view}
+                {view === 'Search'
+                  ? 'Find it again.'
+                  : view === 'Library'
+                    ? 'Your library'
+                    : view === 'Storage'
+                      ? 'Storage & Permissions'
+                      : view}
               </h1>
               <p>
                 {
                   {
-                    Search: 'Start with what you remember. Search only what you’ve imported.',
+                    Search: 'Search your imports and files in approved folders.',
                     Library: 'Your documents and notes, together in one place.',
                     Collections: 'Keep related reading together.',
                     Sources: 'Follow each import from capture to searchable content.',
+                    Storage: 'Choose what ECHO can read and manage automatic indexing.',
                     Settings: 'Your workspace, your device, your controls.',
                   }[view]
                 }
@@ -300,6 +321,17 @@ function Workspace({
               theme={theme}
               toggleTheme={toggleTheme}
               changed={changed}
+              openStorage={() => navigate('Storage')}
+            />
+          ) : null}
+          {view === 'Storage' ? (
+            <StoragePage
+              api={api}
+              initial={storageStatus}
+              changed={(value) => {
+                setStorageStatus(value)
+                refresh()
+              }}
             />
           ) : null}
         </main>
@@ -317,6 +349,17 @@ function Workspace({
           maxBytes={settings.data?.max_upload_bytes ?? 20 * 1024 * 1024}
           close={() => setImporting(false)}
           changed={changed}
+        />
+      ) : null}
+      {onboarding ? (
+        <StorageConsent
+          api={api}
+          status={storageStatus}
+          close={() => setOnboarding(false)}
+          saved={(value) => {
+            setStorageStatus(value)
+            refresh()
+          }}
         />
       ) : null}
     </div>

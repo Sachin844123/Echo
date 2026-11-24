@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Api, errorText, useGet } from './api'
-import { Brand, ErrorBox, Icon } from './components'
+import { Brand, ErrorBox, Icon, Loading } from './components'
 import { SearchPage } from './SearchPage'
 import { LibraryPage, CollectionsPage } from './LibraryPage'
 import { SourcesPage, SettingsPage } from './SystemPages'
@@ -26,13 +26,24 @@ function initialTheme(): 'light' | 'dark' {
 export function App() {
   const [theme, setTheme] = useState(initialTheme)
   const [api, setApi] = useState<Api | null>(null)
-  const [expired, setExpired] = useState(false)
-  const disconnect = useCallback(() => {
-    setApi((current) => {
-      current?.dispose()
-      return null
-    })
-  }, [])
+  const [startupError, setStartupError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    const client = new Api()
+    let active = true
+    void client.start().then(
+      () => {
+        if (active) setApi(client)
+      },
+      (error) => {
+        if (active) setStartupError(errorText(error))
+      },
+    )
+    return () => {
+      active = false
+      client.dispose()
+    }
+  }, [attempt])
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     try {
@@ -43,153 +54,30 @@ export function App() {
   }, [theme])
   const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'))
   return api ? (
-    <Workspace api={api} disconnect={disconnect} theme={theme} toggleTheme={toggleTheme} />
+    <Workspace api={api} theme={theme} toggleTheme={toggleTheme} />
   ) : (
-    <Connect
-      theme={theme}
-      toggleTheme={toggleTheme}
-      expired={expired}
-      connect={(token) => {
-        const session = new Api(token, () => {
-          disconnect()
-          setExpired(true)
-        })
-        return session
-          .request('/api/v1/session/check', { method: 'POST' })
-          .then(() => {
-            setExpired(false)
-            setApi(session)
-          })
-          .catch((error) => {
-            session.dispose()
-            throw error
-          })
-      }}
-    />
-  )
-}
-function Connect({
-  connect,
-  theme,
-  toggleTheme,
-  expired,
-}: {
-  connect: (token: string) => Promise<void>
-  theme: string
-  toggleTheme: () => void
-  expired: boolean
-}) {
-  const [token, setToken] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  return (
-    <main className="connect-page">
-      <header className="connect-header">
-        <Brand />
-        <button
-          className="icon-button"
-          onClick={toggleTheme}
-          aria-label={`Use ${theme === 'light' ? 'dark' : 'light'} theme`}
-        >
-          <Icon name={theme === 'light' ? 'moon' : 'sun'} />
-        </button>
-      </header>
-      <div className="connect-layout">
-        <section className="connect-intro">
-          <div className="local-label">
-            <span className="status-dot" />
-            On your device
-          </div>
-          <h1>
-            Your reading.
-            <br />
-            Within reach.
-          </h1>
-          <p>Find a document by the words you remember, the idea it held, or where you put it.</p>
-          <div className="connect-principle">
-            <Icon name="library" />
-            <span>Only documents you import.</span>
-          </div>
-          <div className="connect-principle">
-            <Icon name="lock" />
-            <span>Stored and searched locally.</span>
-          </div>
-        </section>
-        <section className="connect-card" aria-labelledby="connect-title">
-          <div className="empty-icon">
-            <Icon name="lock" size={24} />
-          </div>
-          <h2 id="connect-title">Open your workspace</h2>
-          <p>Use the session token from your local ECHO server.</p>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault()
-              if (busy) return
-              setBusy(true)
-              setError('')
-              try {
-                await connect(token.trim())
-                setToken('')
-              } catch (e) {
-                setError(errorText(e))
-                setBusy(false)
-              }
-            }}
-          >
-            <label>
-              Session token
-              <input
-                type="password"
-                name="echo-session"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                required
-                minLength={43}
-                maxLength={128}
-                autoFocus
-              />
-            </label>
-            {error ? (
-              <ErrorBox message={error} />
-            ) : expired ? (
-              <ErrorBox message="Your session ended. Enter the current server token to reconnect." />
-            ) : null}
-            <button className="button primary connect-button" disabled={busy || !token.trim()}>
-              {busy ? 'Connecting…' : 'Open workspace'}
-              <Icon name="arrow" />
-            </button>
-          </form>
-          <p className="fine-print">
-            <Icon name="lock" size={14} />
-            Your token stays in this tab's memory. Closing or reloading the page locks the
-            workspace.
-          </p>
-          <details className="connection-help">
-            <summary>Where do I find my token?</summary>
-            <p>
-              In the PowerShell window used to start ECHO, run <code>$env:ECHO_SESSION_TOKEN</code>.
-              Paste that value above. It is not an account password.
-            </p>
-          </details>
-        </section>
-      </div>
-      <footer className="connect-footer">
-        <span>ECHO</span>
-        <span>A local library for your own documents.</span>
-      </footer>
+    <main className="workspace-startup">
+      <Brand />
+      {startupError ? (
+        <ErrorBox
+          message={startupError}
+          retry={() => {
+            setStartupError('')
+            setAttempt((current) => current + 1)
+          }}
+        />
+      ) : (
+        <Loading label="Opening your workspace" />
+      )}
     </main>
   )
 }
 function Workspace({
   api,
-  disconnect,
   theme,
   toggleTheme,
 }: {
   api: Api
-  disconnect: () => void
   theme: string
   toggleTheme: () => void
 }) {
@@ -296,10 +184,6 @@ function Workspace({
               </small>
             </div>
           </div>
-          <button className="nav-link" onClick={disconnect}>
-            <Icon name="lock" />
-            Lock workspace
-          </button>
         </div>
       </aside>
       <div className="workspace-content">
@@ -415,7 +299,6 @@ function Workspace({
               status={status}
               theme={theme}
               toggleTheme={toggleTheme}
-              disconnect={disconnect}
               changed={changed}
             />
           ) : null}

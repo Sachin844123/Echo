@@ -66,6 +66,7 @@ class Source(UpdatedAt, Base):
     indexed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     processing_status: Mapped[str] = mapped_column(String(20), server_default="pending", index=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, server_default="0", index=True)
+    manual_capture: Mapped[bool] = mapped_column(Boolean, server_default="1")
 
 
 class Document(CreatedAt, Base):
@@ -169,3 +170,28 @@ class AppSetting(UpdatedAt, Base):
     __table_args__ = (CheckConstraint("length(trim(key)) > 0", name="key_not_blank"),)
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+class LocalAccess(UpdatedAt, Base):
+    __tablename__ = "local_access"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton"),
+        CheckConstraint("mode IN ('all', 'personal', 'selected', 'deny')", name="mode"),
+        CheckConstraint("state IN ('active', 'paused', 'cancelled')", name="state"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    mode: Mapped[str] = mapped_column(String(20))
+    state: Mapped[str] = mapped_column(String(20))
+    roots: Mapped[str] = mapped_column(Text)
+    exclusions: Mapped[str] = mapped_column(Text)
+    extensions: Mapped[str] = mapped_column(Text)
+
+
+class LocalFile(UpdatedAt, Base):
+    __tablename__ = "local_files"
+    __table_args__ = (CheckConstraint("size_bytes >= 0", name="size_bytes"),)
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    mtime_ns: Mapped[int] = mapped_column(Integer)
+    identity: Mapped[str] = mapped_column(String(100))

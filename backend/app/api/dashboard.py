@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 from app import __version__
 from app.api.search import read_input
 from app.database.models import AppSetting, Collection, Source
+from app.extraction.ocr import ocr_status
 
 router = APIRouter(prefix="/api/v1")
 
@@ -35,10 +36,11 @@ def settings(request: Request):
     config = request.app.state.search.settings
     return {"version": __version__, "search_history_enabled": False,
             "max_upload_bytes": config.max_upload_bytes,
-            "supported_types": ["pdf", "txt", "markdown", "docx", "note"],
+            "supported_types": ["pdf", "txt", "markdown", "docx", "note", "image"],
+            "ocr": ocr_status(config),
             "retrieval": {name: getattr(config, name) for name in (
                 "chunk_tokens", "chunk_overlap", "candidate_pool", "result_limit", "rrf_k",
-                "embedding_model_name", "embedding_batch_size")},
+                "embedding_model_name", "embedding_batch_size", "retrieval_profile", "spelling_correction", "candidate_scan_limit")},
             "rerank_weights": config.rerank_weights.model_dump()}
 
 

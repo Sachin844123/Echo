@@ -1,5 +1,18 @@
 # Decisions
 
+## Direct local startup and Windows launcher — 2026-11-24
+
+- Remove manual authentication from the dashboard. A guarded same-origin
+  startup request supplies a randomly generated process credential. The
+  dashboard holds it in memory and retries a request once after a stale
+  credential is rejected. Native API clients can still set a separate token.
+- Keep loopback binding, strict Host and Origin checks, and bearer validation
+  before routing API calls. Require browser Fetch Metadata and a custom header
+  for the startup route. Cross-origin preflights cannot use that header.
+- Use the existing Python environment and a normal Windows batch file. Build
+  the dashboard if it is missing and run migrations under the same library
+  lock as the CLI. Open the default browser after the local server is ready.
+
 ## M7 OCR, image search and retrieval coverage — 2026-11-24
 
 - Use PyMuPDF's Tesseract integration inside the existing parser subprocess.

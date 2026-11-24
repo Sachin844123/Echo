@@ -26,6 +26,7 @@ export function SearchPage({
   const [to, setTo] = useState('')
   const [contextType, setContextType] = useState('')
   const [contextCollection, setContextCollection] = useState('')
+  const [correctSpelling, setCorrectSpelling] = useState<boolean>()
   const [response, setResponse] = useState<SearchResponse>()
   const [submitted, setSubmitted] = useState('')
   const [selected, setSelected] = useState<SearchHit>()
@@ -75,8 +76,9 @@ export function SearchPage({
         {
           query: query.trim(),
           mode,
+          correct_spelling: correctSpelling,
           limit: 10,
-          source_types: type ? [type] : [],
+          source_types: mode === 'visual' ? ['image'] : type ? [type] : [],
           collection_id: collection ? Number(collection) : null,
           captured_from: from ? new Date(`${from}T00:00:00`).toISOString() : null,
           captured_to: to ? new Date(`${to}T23:59:59.999`).toISOString() : null,
@@ -155,7 +157,8 @@ export function SearchPage({
             File type
             <select
               aria-label="File type"
-              value={type}
+              value={mode === 'visual' ? 'image' : type}
+              disabled={mode === 'visual'}
               onChange={(e) => {
                 modified()
                 setType(e.target.value)
@@ -272,7 +275,28 @@ export function SearchPage({
         ) : null}
       </form>
       {collections.error ? <ErrorBox message={collections.error} /> : null}
-      {status && !status.semantic_available && mode !== 'keyword' ? (
+      {mode !== 'visual' ? (
+        <label className="checkbox-row search-spelling">
+          <input
+            type="checkbox"
+            checked={correctSpelling ?? status?.spelling_correction ?? true}
+            onChange={(e) => {
+              modified()
+              setCorrectSpelling(e.target.checked)
+            }}
+          />
+          Correct likely spelling mistakes using my library
+        </label>
+      ) : (
+        <div className="info-banner">
+          Describe an imported image, for example “a red car”. To find words inside an image, use
+          Keywords or Hybrid with the Image filter.
+          {status?.visual && !status.visual.available
+            ? ' The local visual model is unavailable; check Settings.'
+            : ''}
+        </div>
+      )}
+      {status && !status.semantic_available && mode !== 'keyword' && mode !== 'visual' ? (
         <div className="info-banner">
           <Icon name="info" />
           <span>
@@ -301,8 +325,24 @@ export function SearchPage({
                 <h2>
                   {response.results.length} result{response.results.length === 1 ? '' : 's'}
                 </h2>
-                <span>Best passage from each document</span>
+                <span>
+                  {mode === 'visual'
+                    ? 'Imported images matched by appearance'
+                    : 'Best passage from each document'}
+                </span>
               </div>
+              {response.query_analysis?.corrections.length ? (
+                <div className="info-banner">
+                  Searching for: {response.query_analysis.effective_query}. Turn off spelling
+                  correction to search your exact wording.
+                </div>
+              ) : null}
+              {response.candidate_scan_truncated ? (
+                <div className="info-banner">
+                  The candidate scan limit was reached. Try a more specific query or a collection
+                  filter.
+                </div>
+              ) : null}
               {response.indexing_incomplete ? (
                 <div className="info-banner">
                   Some documents are still processing or need attention. Results may be incomplete.
@@ -327,11 +367,18 @@ export function SearchPage({
                           {sourceNames[hit.source_type]}
                           <span aria-hidden="true">·</span>
                           {dateLabel(hit.captured_at)}
-                          {hit.page_number ? <span>Page {hit.page_number}</span> : null}
+                          {mode !== 'visual' && hit.page_number ? (
+                            <span>Page {hit.page_number}</span>
+                          ) : null}
                         </span>
-                        <span className="excerpt">
-                          <Highlight text={hit.excerpt} query={submitted} />
-                        </span>
+                        {mode !== 'visual' ? (
+                          <span className="excerpt">
+                            <Highlight
+                              text={hit.excerpt}
+                              query={response.query_analysis?.effective_query ?? submitted}
+                            />
+                          </span>
+                        ) : null}
                         {hit.heading ? <span className="row-heading">{hit.heading}</span> : null}
                       </span>
                       <Icon name="arrow" size={17} />
@@ -389,7 +436,7 @@ export function SearchPage({
             key={`${selected.source_id}-${selected.chunk_id}`}
             api={api}
             sourceId={selected.source_id}
-            hit={selected}
+            hit={mode === 'visual' ? undefined : selected}
             revision={revision}
             changed={changed}
             close={() => setSelected(undefined)}

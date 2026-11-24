@@ -11,6 +11,7 @@ from app.database.fts import reconcile_fts
 from app.database.models import Chunk, CollectionItem, Document, EmbeddingRecord, ImageEmbeddingRecord, IndexingJob, Source
 from app.embeddings.local import LocalEncoder
 from app.retrieval.errors import RetrievalFailure
+from app.ingestion.errors import ImportFailure
 from app.retrieval.vectors import VectorStore
 from app.retrieval.reranking import Candidate, RERANK_VERSION, rerank
 from app.retrieval.visual import VisualIndex, refresh_image_status
@@ -202,11 +203,43 @@ class SearchEngine:
             return False  # Tombstone remains durable; worker/startup retries file/IO failures.
 
     def finish_deletions(self):
-        with self.lock:
-            with self.sessions() as session:
-                ids = list(session.scalars(select(Source.id).where(Source.is_deleted.is_(True))))
-            for source_id in ids:
-                self._finish_delete(source_id)
+        # A permission revocation can tombstone thousands of sources. Persist
+        # each vector snapshot once per bounded batch while retaining retries.
+        last = 0
+        while True:
+            with self.lock:
+                with self.sessions() as session:
+                    batch = list(session.scalars(select(Source.id).where(
+                        Source.is_deleted.is_(True), Source.id > last).order_by(Source.id).limit(64)))
+                if not batch:
+                    return
+                last = batch[-1]
+                if len(batch) == 1:
+                    self._finish_delete(last)
+                    continue
+                self._finish_deletion_batch(batch)
+
+    def _finish_deletion_batch(self, batch):
+        try:
+            with self.sessions.begin() as session:
+                chunk_ids = set(session.scalars(select(Chunk.id).join(Document).where(Document.source_id.in_(batch))))
+                for store, remove_ids in ((self.vectors, chunk_ids), (self.visual.vectors, set(batch))):
+                    present = store.ids & remove_ids
+                    if present:
+                        store.remove(present)
+                        store.save()
+                    elif store.corrupt:
+                        store.discard_corrupt()
+                for source in session.scalars(select(Source).where(Source.id.in_(batch))):
+                    try:
+                        if source.file_path:
+                            self.files.remove(source.file_path)
+                    except (OSError, ImportFailure):
+                        continue  # The tombstone is retried independently of the rest.
+                    session.delete(source)
+        except Exception:
+            self.vectors.load()
+            self.visual.vectors.load()
 
     def status(self):
         with self.lock, self.sessions() as session:

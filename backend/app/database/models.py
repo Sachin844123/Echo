@@ -47,7 +47,7 @@ class UpdatedAt(CreatedAt):
 class Source(UpdatedAt, Base):
     __tablename__ = "sources"
     __table_args__ = (
-        CheckConstraint("source_type IN ('pdf','txt','markdown','docx','note')", name="source_type"),
+        CheckConstraint("source_type IN ('pdf','txt','markdown','docx','note','image')", name="source_type"),
         CheckConstraint("length(trim(title)) > 0", name="title_not_blank"),
         CheckConstraint("length(content_hash) = 64 AND content_hash NOT GLOB '*[^0-9a-f]*'", name="sha256"),
         CheckConstraint("processing_status IN ('pending','processing','indexed','failed')", name="processing_status"),
@@ -131,6 +131,16 @@ class Collection(UpdatedAt, Base):
     description: Mapped[str | None] = mapped_column(Text)
 
 
+class ImageEmbeddingRecord(CreatedAt, Base):
+    __tablename__ = "image_embedding_records"
+    __table_args__ = (CheckConstraint("dimension > 0", name="dimension"),)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), primary_key=True)
+    model_name: Mapped[str] = mapped_column(String(200))
+    model_version: Mapped[str] = mapped_column(String(100))
+    dimension: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64))
+
+
 class CollectionItem(CreatedAt, Base):
     __tablename__ = "collection_items"
     collection_id: Mapped[int] = mapped_column(ForeignKey("collections.id", ondelete="CASCADE"), primary_key=True)
@@ -149,7 +159,7 @@ class IndexingJob(UpdatedAt, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(20), server_default="pending")
-    stage: Mapped[str] = mapped_column(String(20), CheckConstraint("stage IN ('ingestion','indexing')", name="stage"), server_default="ingestion")
+    stage: Mapped[str] = mapped_column(String(20), CheckConstraint("stage IN ('ingestion','indexing','visual')", name="stage"), server_default="ingestion")
     attempts: Mapped[int] = mapped_column(Integer, server_default="0")
     error: Mapped[str | None] = mapped_column(Text)
 

@@ -1,5 +1,28 @@
 # Decisions
 
+## M7 OCR, image search and retrieval coverage — 2026-11-24
+
+- Use PyMuPDF's Tesseract integration inside the existing parser subprocess.
+  Preserve native PDF text and add OCR for scanned pages and raster regions on
+  mixed pages. Record how text was extracted so previews can distinguish it
+  from filename metadata. Default to English and bound raster size and time.
+- Index imported image appearance with CPU CLIP ViT-B/32 and a separate
+  source-ID FAISS snapshot. Reuse Torch, Transformers and safetensors. Add
+  Pillow for raster decoding, EXIF orientation and metadata-free previews.
+  A pinned setup download checks the weights and the runtime verifies the
+  manifest. Load CLIP on demand.
+- Persist image-vector identity and source hash in SQLite. Publish through
+  durable jobs, reconcile snapshots at startup and remove image vectors during
+  deletion and reprocessing. Run visual inference outside the library lock
+  and recheck the source and job before publication.
+- Expand source and job constraints in a transactional SQLite migration under
+  the supported launcher's instance lock. Disable foreign-key actions only on
+  the migration connection during the rebuild. Check references before commit
+  and restore enforcement even when the migration rolls back.
+- Correct out-of-vocabulary words only when the local FTS vocabulary has a
+  unique close match. Prefer the stronger keyword rank at equal RRF scores.
+  Keep the prior candidate profile and old evaluation defaults for comparison.
+
 ## M6 development upload fix — 2026-11-19
 
 - A running backend rejected both port-5173 browser origins with 403 while

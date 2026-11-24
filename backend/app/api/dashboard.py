@@ -12,8 +12,16 @@ from app import __version__
 from app.api.search import read_input
 from app.database.models import AppSetting, Collection, Source
 from app.extraction.ocr import ocr_status
+from app.security.middleware import SESSION_BOOTSTRAP_PATH
 
 router = APIRouter(prefix="/api/v1")
+session_router = APIRouter()
+
+
+@session_router.post(SESSION_BOOTSTRAP_PATH)
+async def open_dashboard_session(request: Request):
+    """Only the local dashboard bootstrap policy may reach this route."""
+    return {"session": request.app.state.dashboard_session.get_secret_value()}
 
 
 class DeleteLibraryInput(BaseModel):

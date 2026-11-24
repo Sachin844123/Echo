@@ -9,10 +9,14 @@ SQLAlchemy>=2.0.36,<2.1
 alembic>=1.14,<2
 # ASGI server required to run FastAPI. No optional standard extras.
 uvicorn>=0.34,<1
-# Requested M2 document parsers; no OCR or network loaders.
+# Document parsers; PyMuPDF also supplies the local Tesseract OCR integration.
 PyMuPDF>=1.26.7,<2
 python-docx>=1.2,<2
 # Requested M3 local retrieval stack. NumPy is FAISS's array interface.
 faiss-cpu>=1.10,<2
 sentence-transformers>=3.4,<6
 numpy>=1.26,<3
+# Image decoding for explicitly requested local CLIP visual search.
+Pillow>=11.3,<13
+# Directly used for CLIP; already required transitively by sentence-transformers.
+transformers>=5.23,<6

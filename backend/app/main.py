@@ -26,6 +26,8 @@ from app.api.sources import router as sources_router
 from app.retrieval.engine import SearchEngine
 from app.retrieval.errors import RetrievalFailure
 from app.api.dashboard import router as dashboard_router, session_router
+from app.api.storage import router as storage_router
+from app.storage.indexing import LocalIndexing
 
 
 logger = logging.getLogger("echo.app")
@@ -39,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         engine = create_sqlite_engine(settings.database_path)
         ingestion = None
+        local_indexing = None
         try:
             if not settings.database_path.is_file():
                 raise RuntimeError("database is missing; run python -m app migrate")
@@ -50,12 +53,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ingestion.indexer = app.state.search
             await run_in_threadpool(ingestion.start)
             app.state.ingestion = ingestion
+            local_indexing = LocalIndexing(ingestion)
+            await run_in_threadpool(local_indexing.start)
+            app.state.local_indexing = local_indexing
             logger.info("startup_complete")
             yield
         except Exception:
             logger.exception("startup_failed")
             raise
         finally:
+            if local_indexing is not None:
+                await run_in_threadpool(local_indexing.stop)
             if ingestion is not None:
                 await run_in_threadpool(ingestion.stop)
             await run_in_threadpool(engine.dispose)
@@ -78,6 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sources_router)
     app.include_router(dashboard_router)
     app.include_router(session_router)
+    app.include_router(storage_router)
     app.add_exception_handler(ImportFailure, import_failure_handler)
     app.add_exception_handler(RetrievalFailure, retrieval_failure_handler)
 

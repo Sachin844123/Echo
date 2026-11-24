@@ -244,7 +244,7 @@ def run_evaluation(dataset_path: Path, output: Path, config: RunConfig, split: s
         raise EvaluationError("invalid_split")
     dataset_path, output, model_dir = dataset_path.resolve(), output.resolve(), model_dir.resolve()
     dataset = load_dataset(dataset_path)
-    settings = Settings(data_dir=output / "corpus", embedding_model_dir=model_dir,
+    settings = Settings(data_dir=output / "corpus", embedding_model_dir=model_dir, visual_indexing_enabled=False,
                         **{key: value for key, value in config.model_dump().items() if key in Settings.model_fields})
     files = check_files(dataset, dataset_path.parent, settings.max_upload_bytes)
     if output.is_relative_to(model_dir):

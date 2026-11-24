@@ -10,13 +10,15 @@ from xml.etree import ElementTree
 
 from app.core.config import Settings
 from app.ingestion.errors import ImportFailure
+from app.security.images import image_header
 
 MIMES = {
     "pdf": "application/pdf", "txt": "text/plain", "markdown": "text/markdown",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "note": "text/plain",
 }
-EXTENSIONS = {".pdf": "pdf", ".txt": "txt", ".md": "markdown", ".markdown": "markdown", ".docx": "docx"}
+EXTENSIONS = {".pdf": "pdf", ".txt": "txt", ".md": "markdown", ".markdown": "markdown", ".docx": "docx",
+              ".png": "image", ".jpg": "image", ".jpeg": "image"}
 DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
 
 
@@ -100,6 +102,12 @@ def detect_file(path: Path, filename: str, settings: Settings) -> str:
     if size > settings.max_upload_bytes:
         raise ImportFailure("file_too_large", 413)
     expected = EXTENSIONS[Path(safe_filename(filename)).suffix.lower()]
+    if expected == "image":
+        mime, _, _ = image_header(path, settings.max_image_pixels)
+        expected_mime = "image/png" if Path(filename).suffix.lower() == ".png" else "image/jpeg"
+        if mime != expected_mime:
+            raise ImportFailure("type_mismatch", 415)
+        return "image"
     with path.open("rb") as stream:
         prefix = stream.read(8)
     if prefix.startswith(b"%PDF-"):

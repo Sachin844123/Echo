@@ -46,11 +46,14 @@ Keywords remain available when the local model is absent.
   delete-all. Search history remains off. Only `echo.theme.v1` persists in browser
   storage; tokens, queries, titles and document content do not.
 
-Imports accept PDF, TXT, Markdown, DOCX and manual notes. Files upload sequentially
+Imports accept PDF, TXT, Markdown, DOCX, PNG, JPEG and manual notes. Files upload sequentially
 with per-file results and duplicates reported. Each file has the server's size
 limit; the UI accepts up to 50 files per selection. Processing happens in the
 existing backend worker. Date inputs use the browser's local timezone and are
 sent as UTC-aware timestamps.
+Use **Images** for visual descriptions and **Keywords** or **Hybrid** with the
+Image filter for recognized text and filenames. Open an existing scan and choose
+**Reprocess** after setting up OCR. See [OCR and image search](../docs/images.md).
 
 ## Development server (optional)
 
@@ -111,9 +114,11 @@ to `chromium`. This is a setup-only download.
 Browser tests start a separate real ECHO server on `127.0.0.1:8237`, with a new
 temporary library and random token. They refuse to reuse an existing server.
 All documents are tiny labelled TEST DATA; no user library is read or cleared.
-The test model is deliberately absent to verify visible semantic failure and
-real keyword retrieval. Actual offline-model behavior remains covered by the
-backend suite. Tests cover real import/search/collection/delete flows, XSS-safe
+The text embedding model is deliberately absent in browser tests to exercise
+semantic failure and real keyword retrieval. Before running the image workflow,
+prepare the English OCR data and CLIP assets in their default locations using
+the [image setup guide](../docs/images.md). Tests cover import, search, collection
+and deletion flows, image OCR and visual search, XSS-safe
 previews, token privacy, stale requests, keyboard focus, theme changes, narrow
 layouts and automated axe accessibility checks. Screenshots and reports are
 Git-ignored. Automated checks do not replace a full assistive-technology audit.
@@ -131,8 +136,8 @@ cancelled when superseded. Index status polls every five seconds while visible.
 Text previews fetch 4,000 Unicode code points at a time; highlights respect
 Python code-point offsets, including non-BMP characters.
 
-No new backend dependency or schema migration is needed. Requested frontend
-packages are pinned in `package-lock.json`. Additional development dependencies
+Image search requires schema revision `0003_images` and Pillow in the backend.
+Frontend packages are pinned in `package-lock.json`. Development dependencies
 are justified in [the design record](../docs/dashboard-design.md). Rendering
 uses system fonts and local SVGs; no icon/font CDN, analytics or service worker.
 

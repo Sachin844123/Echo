@@ -149,7 +149,7 @@ export function SearchPage({
           </div>
           <span className="search-scope">
             <Icon name="library" size={14} />
-            Your imported content
+            Your local library
           </span>
         </div>
         <div className="filters">
@@ -388,7 +388,7 @@ export function SearchPage({
               ) : (
                 <Empty icon="search" title="No matching documents">
                   Try fewer words, a related idea, or remove a filter. ECHO only searches content
-                  you have imported.
+                  already in your library.
                 </Empty>
               )}
             </>

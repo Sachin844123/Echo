@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from app.database.engine import create_sqlite_engine
-from app.database.migrate import alembic_config, check_database, upgrade_database
+from app.database.migrate import alembic_config, check_database, upgrade_database, migration_connection
 from app.database.models import AppSetting, Base, Chunk, Collection, CollectionItem, Document, EmbeddingRecord, IndexingJob, Source
 
 
@@ -61,7 +61,7 @@ def test_migration_downgrade_upgrade(engine):
     with Session(engine) as session:
         populated_graph(session)
     config = alembic_config()
-    with engine.begin() as connection:
+    with migration_connection(engine) as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, "base")
     assert inspect(engine).get_table_names() == ["alembic_version"]
@@ -234,3 +234,49 @@ def test_upgrade_populated_m2_backfills_fts_without_losing_rows(tmp_path):
             assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
     finally:
         old.dispose()
+
+
+def test_image_migration_preserves_full_graph_sequences_and_triggers(tmp_path):
+    engine = create_sqlite_engine(tmp_path / 'TEST-DATA-m6.sqlite3')
+    config = alembic_config()
+    try:
+        with engine.begin() as connection:
+            config.attributes['connection'] = connection
+            command.upgrade(config, '0002_retrieval')
+        with Session(engine) as session:
+            source_id, _, chunk_id = populated_graph(session)
+            retired = source(content_hash='b' * 64)
+            retired.id = 100
+            session.add(retired)
+            session.commit()
+            session.delete(retired)
+            session.commit()
+        upgrade_database(engine)
+        with engine.begin() as connection:
+            assert connection.exec_driver_sql('PRAGMA foreign_keys').scalar() == 1
+            assert connection.exec_driver_sql('PRAGMA foreign_key_check').all() == []
+            for table in ('sources', 'documents', 'chunks', 'embedding_records', 'collections', 'collection_items', 'indexing_jobs'):
+                assert connection.exec_driver_sql(f'SELECT count(*) FROM {table}').scalar() == 1
+            assert connection.exec_driver_sql('SELECT rowid FROM chunk_fts').scalar() == chunk_id
+            connection.exec_driver_sql("UPDATE sources SET title='TEST DATA newtitle'")
+            assert connection.exec_driver_sql("SELECT rowid FROM chunk_fts WHERE chunk_fts MATCH 'newtitle'").scalar() == chunk_id
+        with Session(engine) as session:
+            new = source(content_hash='c' * 64, source_type='image', mime_type='image/png')
+            session.add(new)
+            session.commit()
+            assert new.id > 100
+            session.execute(delete(Source).where(Source.id == source_id))
+            session.commit()
+            assert session.scalar(select(func.count()).select_from(Chunk)) == 0
+    finally:
+        engine.dispose()
+
+
+def test_migration_failure_restores_fk_enforcement_and_rolls_back(engine):
+    with pytest.raises(RuntimeError, match='TEST DATA rollback'):
+        with migration_connection(engine) as connection:
+            connection.exec_driver_sql('CREATE TABLE failed_migration (id INTEGER)')
+            raise RuntimeError('TEST DATA rollback')
+    assert 'failed_migration' not in inspect(engine).get_table_names()
+    with engine.connect() as connection:
+        assert connection.exec_driver_sql('PRAGMA foreign_keys').scalar() == 1

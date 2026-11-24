@@ -164,7 +164,6 @@ export function SettingsPage({
   status,
   theme,
   toggleTheme,
-  disconnect,
   changed,
 }: {
   api: Api
@@ -172,7 +171,6 @@ export function SettingsPage({
   status?: IndexStatus
   theme: string
   toggleTheme: () => void
-  disconnect: () => void
   changed: (message?: string) => void
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -206,7 +204,7 @@ export function SettingsPage({
         <div className="settings-section-heading">
           <Icon name="lock" />
           <div>
-            <h2>Privacy & session</h2>
+            <h2>Privacy</h2>
             <p>Your library stays on this device.</p>
           </div>
         </div>
@@ -216,16 +214,6 @@ export function SettingsPage({
             <p>Queries are not saved. ECHO searches only documents you import.</p>
           </div>
           <span className="plain-badge">Off</span>
-        </div>
-        <div className="setting-row">
-          <div>
-            <strong>Session token</strong>
-            <p>Kept in memory for this tab. Locking clears it and closes document previews.</p>
-          </div>
-          <button className="button" onClick={disconnect}>
-            <Icon name="lock" size={16} />
-            Lock workspace
-          </button>
         </div>
       </section>
       <section className="settings-section">

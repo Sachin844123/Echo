@@ -1,5 +1,14 @@
 # ECHO retrieval evaluation — M4 and M5
 
+The optional `retrieval_profile`, `spelling_correction` and `candidate_scan_limit`
+config fields control candidate balancing and query correction. Old configs
+default to `classic` with correction off. The example config shows the new
+dashboard settings. OCR is off by default in evaluation. For scanned inputs,
+set `ocr_enabled` and `ocr_languages` in the frozen configuration and prepare
+the matching local language data. PNG/JPEG manifest entries use `source_type`
+`image`. The four methods evaluate text and filename metadata. The harness
+disables visual indexing. See [OCR setup](../docs/images.md).
+
 Compare **A: keyword**, **B: semantic**, **C: hybrid RRF**, and
 **D: hybrid with contextual reranking** on identical,
 fully indexed documents and selected labelled queries, using the production
@@ -86,7 +95,7 @@ letter or digit. Prefer opaque IDs: query and document IDs appear in reports.
 | `id` | Unique document ID referenced by labels |
 | `path` | Captured-file path relative to the manifest directory |
 | `title` | Nonblank title, at most 200 characters; used by FTS |
-| `source_type` | `pdf`, `txt`, `markdown`, `docx`, or `note`; must match validated input |
+| `source_type` | `pdf`, `txt`, `markdown`, `docx`, `note`, or `image`; must match validated input |
 | `captured_at` | Explicit ISO timestamp with timezone |
 | `collections` | Optional collection-ID list, default empty |
 

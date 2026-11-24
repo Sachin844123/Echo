@@ -4,8 +4,38 @@
 
 **M1 through M6 LOCAL API HARDENING + DASHBOARD are complete and tested.**
 **M7 OCR, imported image search and retrieval coverage are complete and tested.**
+**Opt-in local storage access and indexing are complete and tested.**
 Webpage capture and packaging remain unstarted. React Bits is queued as a
 separate dashboard update after M7.
+
+## Local file access and automatic indexing
+
+- Added persisted consent with all fixed drives, personal folders, selected
+  folders, and denial. The onboarding and Storage & Permissions controls are
+  in `frontend/src/StoragePage.tsx`. Manual upload stays available throughout.
+- Added native Windows drive and known-folder discovery, a guarded `os.scandir`
+  scan, watchdog notifications, metadata and hash deduplication, and bounded
+  automatic storage. `backend/app/storage` owns the scanner and path policy.
+- Added API controls, progress and paginated tracked files. Migration
+  `0004_local_storage` stores path mappings and manual ownership and preserves
+  existing sources. Revocation and stale-file cleanup use durable tombstones.
+- Windows verification found that `stat` and `fstat` can report different
+  `ctime` values for one file. The fingerprint uses device and inode identity
+  and a stable birth-time field on Windows. The corrected discovery and live
+  file lifecycle passed isolated tests.
+- Upgrade and configuration steps are in [Storage & Permissions](local-storage.md).
+- `.venv\Scripts\python.exe -m pytest -q --tb=short` returned
+  **`303 passed in 403.65s (0:06:43)`**. The added tests cover access enforcement,
+  protected paths and a junction, hashing and metadata reuse, live create/update/
+  delete notifications, permission persistence, and revocation during a read.
+  The locked dependencies passed `pip check`.
+- In `frontend`, `npm test` returned **`14 passed (2.4m)`**. After the final UI
+  refinements, the onboarding, delete-all and accessibility rerun returned
+  **`3 passed (1.0m)`**. `npm run build` and `npm run format:check` passed.
+- Native drive and known-folder discovery ran without scanning real folders.
+  API tests used temporary libraries and labelled synthetic files. The live
+  library was left at its existing schema. The launcher applies the migration
+  on the next user-started upgrade.
 
 ## Direct dashboard startup and Windows launcher — 2026-11-24
 

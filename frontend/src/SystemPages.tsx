@@ -165,6 +165,7 @@ export function SettingsPage({
   theme,
   toggleTheme,
   changed,
+  openStorage,
 }: {
   api: Api
   settings: { data?: AppSettings; loading: boolean; error?: string }
@@ -172,6 +173,7 @@ export function SettingsPage({
   theme: string
   toggleTheme: () => void
   changed: (message?: string) => void
+  openStorage: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
   return (
@@ -211,9 +213,21 @@ export function SettingsPage({
         <div className="setting-row">
           <div>
             <strong>Search history</strong>
-            <p>Queries are not saved. ECHO searches only documents you import.</p>
+            <p>
+              Queries are not saved. ECHO searches your imports and eligible files from approved
+              folders.
+            </p>
           </div>
           <span className="plain-badge">Off</span>
+        </div>
+        <div className="setting-row">
+          <div>
+            <strong>Local file access</strong>
+            <p>Approve folders and control automatic indexing.</p>
+          </div>
+          <button className="button" onClick={openStorage}>
+            Storage &amp; Permissions
+          </button>
         </div>
       </section>
       <section className="settings-section">
@@ -333,7 +347,7 @@ export function SettingsPage({
           title="Delete all imported content?"
           label="Permanently delete library"
           phrase="DELETE ALL"
-          description="This removes the entire imported library and all collections. This cannot be undone. Original source files and the local model are kept."
+          description="This removes the entire library and all collections, and turns off automatic folder indexing. This cannot be undone. Original source files and local models are kept."
           close={() => setDeleting(false)}
           action={async () => {
             const result = await api.json<{ status: string }>('/api/v1/library', 'DELETE', {

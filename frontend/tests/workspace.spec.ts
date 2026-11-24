@@ -20,6 +20,12 @@ test.afterEach(async ({ page }) => {
 const token = () => process.env.ECHO_E2E_TOKEN!
 async function openWorkspace(page: Page) {
   await page.goto('/')
+  const permission = page.getByRole('dialog', { name: 'Allow ECHO to access local files?' })
+  const search = page.getByRole('heading', { name: 'Find it again.' })
+  await expect(permission.or(search)).toBeVisible()
+  if (await permission.isVisible()) {
+    await permission.getByRole('button', { name: 'Save permission' }).click()
+  }
   await expect(page.getByRole('heading', { name: 'Find it again.' })).toBeVisible()
 }
 async function navigate(page: Page, name: string) {
@@ -61,10 +67,30 @@ test.beforeEach(async ({ request }) => {
   expect(response.ok()).toBeTruthy()
 })
 
-test('the workspace opens directly on first visit and reload without browser credential storage', async ({
+test('onboarding shows all access levels, persists denial, and keeps the workspace usable', async ({
   page,
 }) => {
-  await openWorkspace(page)
+  await page.goto('/')
+  const permission = page.getByRole('dialog', { name: 'Allow ECHO to access local files?' })
+  await expect(permission).toBeVisible()
+  for (const option of [
+    'All Accessible Local Files',
+    'Personal Folders Only',
+    'Selected Folders Only',
+    'Deny Access',
+  ]) {
+    await expect(permission.getByRole('radio', { name: new RegExp(option) })).toBeVisible()
+  }
+  await expect(permission.getByRole('radio', { name: /Deny Access/ })).toBeChecked()
+  await permission.getByRole('radio', { name: /Selected Folders Only/ }).check()
+  await permission
+    .getByLabel('Approved folders, one absolute path per line')
+    .fill('relative-TEST-DATA')
+  await permission.getByRole('button', { name: 'Save permission' }).click()
+  await expect(permission.getByRole('alert')).toContainText('Use absolute paths')
+  await permission.getByRole('radio', { name: /Deny Access/ }).check()
+  await permission.getByRole('button', { name: 'Save permission' }).click()
+  await expect(page.getByRole('heading', { name: 'Find it again.' })).toBeVisible()
   await expect(page.getByLabel('Session token', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Lock workspace' })).toHaveCount(0)
   await page.reload()
@@ -72,6 +98,9 @@ test('the workspace opens directly on first visit and reload without browser cre
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['echo.theme.v1'])
   expect(await page.evaluate(() => sessionStorage.length)).toBe(0)
   expect(await page.context().cookies()).toEqual([])
+  await navigate(page, 'Storage')
+  await expect(page.getByRole('heading', { name: 'Storage & Permissions' })).toBeVisible()
+  await expect(page.getByText('Deny Access', { exact: true })).toBeVisible()
 })
 
 test('an origin rejection explains the setup issue and startup can be retried', async ({

@@ -3,6 +3,8 @@ import type { Logger } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+export const localProxyPath = '^/(?:api(?:/|$)|session/open$)'
+
 // Vite's default proxy diagnostics include the URL (and therefore filenames).
 // Keep a visible transport failure without forwarding private URLs or stacks.
 export function safeProxyLogger(logger: Logger = createLogger()): Logger {
@@ -30,7 +32,7 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    proxy: { '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true } },
+    proxy: { [localProxyPath]: { target: 'http://127.0.0.1:8000', changeOrigin: true } },
   },
   build: { sourcemap: false },
 })

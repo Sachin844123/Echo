@@ -3,7 +3,6 @@
 import json
 import os
 import re
-import secrets
 import socket
 import subprocess
 import sys
@@ -33,11 +32,11 @@ def test_token_generation_is_random_and_not_persisted(tmp_path):
     assert not (tmp_path / "unused").exists()
 
 
-def test_cli_missing_token_and_invalid_configuration(tmp_path):
+def test_cli_missing_database_and_invalid_configuration(tmp_path):
     env = {**os.environ, "ECHO_DATA_DIR": str(tmp_path)}
     result = run_cli("serve", env)
     assert result.returncode == 2
-    assert "ECHO_SESSION_TOKEN" in result.stderr
+    assert "python -m app migrate" in result.stderr
     secret = "PRIVATE malformed token"
     result = run_cli("serve", {**env, "ECHO_SESSION_TOKEN": secret})
     assert result.returncode == 2
@@ -50,11 +49,10 @@ def test_real_server_migration_and_security(tmp_path):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    token = secrets.token_urlsafe(32)
     env = {
         **os.environ, "ECHO_DATA_DIR": str(tmp_path / "data with spaces and %"),
         "ECHO_EMBEDDING_MODEL_DIR": str(tmp_path / "missing-model"),
-        "ECHO_SESSION_TOKEN": token, "ECHO_PORT": str(port),
+        "ECHO_PORT": str(port),
     }
     migrated = run_cli("migrate", env)
     assert migrated.returncode == 0, migrated.stderr
@@ -80,6 +78,11 @@ def test_real_server_migration_and_security(tmp_path):
             else:
                 raise AssertionError("Local server did not become ready")
             assert response.status_code == 401
+            session = client.post('/session/open', headers={
+                'Origin': f'http://127.0.0.1:{port}', 'Sec-Fetch-Site': 'same-origin', 'X-Echo-Dashboard': '1',
+            })
+            assert session.status_code == 200
+            token = session.json()['session']
             auth = {"Authorization": f"Bearer {token}"}
             response = client.get("/api/v1/health?private=TEST_SECRET_QUERY", headers=auth)
             assert response.status_code == 200

@@ -5,6 +5,7 @@ import secrets
 import time
 import uuid
 
+from pydantic import SecretStr
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -12,15 +13,15 @@ from app.core.config import Settings
 
 
 logger = logging.getLogger("echo.security")
+SESSION_BOOTSTRAP_PATH = "/session/open"
 
 
 class LocalSecurityMiddleware:
-    def __init__(self, app: ASGIApp, settings: Settings):
+    def __init__(self, app: ASGIApp, settings: Settings, dashboard_session: SecretStr):
         self.app = app
         self.settings = settings
-        if settings.session_token is None:
-            raise ValueError("ECHO_SESSION_TOKEN is required")
-        self.expected_token = settings.session_token.get_secret_value().encode("ascii")
+        self.dashboard_token = dashboard_session.get_secret_value().encode("ascii")
+        self.native_token = settings.session_token.get_secret_value().encode("ascii") if settings.session_token else None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "websocket":
@@ -76,20 +77,29 @@ class LocalSecurityMiddleware:
             if origins and not valid_origin:
                 await reject(403, "Origin not allowed")
                 return
+            bootstrap = scope["path"] == SESSION_BOOTSTRAP_PATH and scope["method"] == "POST"
+            if bootstrap and (
+                not valid_origin or headers.get(b"sec-fetch-site") != [b"same-origin"]
+                or headers.get(b"x-echo-dashboard") != [b"1"]
+            ):
+                await reject(403, "Open ECHO from its local dashboard address")
+                return
             # Browser preflight carries no bearer token. It exposes transport policy only;
             # CORSMiddleware handles it without invoking an API route.
             preflight = scope["method"] == "OPTIONS" and valid_origin and b"access-control-request-method" in headers
             # Only the non-sensitive, locally built shell/assets are public.
-            # No API route, preview, imported file or token is served here.
+            # The dashboard bootstrap above uses its own browser request policy.
             shell = scope["method"] in {"GET", "HEAD"} and (
                 scope["path"] in {"/", "/favicon.svg"} or scope["path"].startswith("/assets/"))
-            if not preflight and not shell:
+            if not preflight and not shell and not bootstrap:
                 authorization = headers.get(b"authorization", [])
                 if len(authorization) != 1 or len(authorization[0]) > 256:
                     await reject(401, "Valid session token required")
                     return
                 scheme, separator, token = authorization[0].partition(b" ")
-                if scheme.lower() != b"bearer" or not separator or not secrets.compare_digest(token, self.expected_token):
+                dashboard_match = secrets.compare_digest(token, self.dashboard_token)
+                native_match = self.native_token is not None and secrets.compare_digest(token, self.native_token)
+                if scheme.lower() != b"bearer" or not separator or not (dashboard_match or native_match):
                     await reject(401, "Valid session token required")
                     return
             await self.app(scope, receive, safe_send)

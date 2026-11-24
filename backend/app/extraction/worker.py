@@ -23,7 +23,7 @@ def main() -> int:
         settings = Settings(**request["limits"])
         if path.stat().st_size > settings.max_upload_bytes:
             raise ImportFailure("file_too_large")
-        method = extract_to_spool(path, request["source_type"], Path(request["output"]), settings)
+        method = extract_to_spool(path, request["source_type"], Path(request["output"]), settings, request.get("title"))
         print(json.dumps({"method": method}))
         return 0
     except ImportFailure as error:

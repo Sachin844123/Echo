@@ -1,4 +1,4 @@
-# Local security model — M1–M6
+# Local security model — M1–M7
 
 ECHO is a single-user local process. The primary boundaries are the HTTP server,
 the local session token and the user's filesystem permissions. It is not a
@@ -35,6 +35,13 @@ multi-user service and has no account system.
   application data. Requests that follow it must authenticate.
 - Responses have no-store, nosniff and generated request IDs. Database health
   errors return 503 and unexpected failures return generic 500 responses.
+- Image previews require bearer authentication and are re-encoded at a bounded
+  size. The dashboard displays them through temporary blob URLs and revokes
+  each URL when its preview closes. CSP permits blob URLs for images only.
+- PNG and JPEG imports undergo signature and dimension checks before decoding.
+  OCR runs in the timed parser subprocess. CLIP loads verified local weights
+  and uses no network at runtime. Visual deletion purges the source vector
+  and any obsolete snapshots through the existing tombstone cleanup.
 - M6 exposes only GET/HEAD `/`, `/favicon.svg` and `/assets/*` without a token.
   These serve the locally built empty shell and compiled assets, never data or
   credentials. Every API route remains authenticated. Host/Origin/peer checks

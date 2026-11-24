@@ -145,7 +145,7 @@ export function ImportDialog({
                 <Icon name="upload" size={28} />
                 <strong>Bring your documents here</strong>
                 <p>
-                  PDF, TXT, Markdown or Word
+                  PDF, TXT, Markdown, Word, PNG or JPEG
                   <br />
                   Up to {Math.round(maxBytes / 1024 / 1024)} MB each
                 </p>
@@ -155,7 +155,7 @@ export function ImportDialog({
                     className="file-input"
                     type="file"
                     multiple
-                    accept=".pdf,.txt,.md,.markdown,.docx"
+                    accept=".pdf,.txt,.md,.markdown,.docx,.png,.jpg,.jpeg"
                     disabled={busy}
                     onChange={(e) => select(e.target.files)}
                   />
@@ -213,8 +213,9 @@ export function ImportDialog({
             </ul>
           ) : null}
           <p className="fine-print">
-            ECHO keeps a local copy. Original files stay where they are. Image-only PDFs need OCR,
-            which is not enabled.
+            ECHO keeps a local copy. Original files stay where they are. OCR reads scanned PDFs and
+            images locally; Images search also matches visual descriptions. Language and visual
+            models must be available on this device.
           </p>
           <footer className="dialog-actions">
             <button type="button" className="button" disabled={busy} onClick={close}>

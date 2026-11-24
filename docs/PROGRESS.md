@@ -7,6 +7,30 @@
 Webpage capture and packaging remain unstarted. React Bits is queued as a
 separate dashboard update after M7.
 
+## Direct dashboard startup and Windows launcher — 2026-11-24
+
+- Removed the login and lock controls. The dashboard opens automatically and
+  renews its runtime credential after an API rejection caused by a restart.
+  The library API still requires a bearer credential. The startup route keeps
+  the exact origin, loopback and Host checks and requires same-origin Fetch
+  Metadata and a custom header. The optional native API token stays separate.
+- Added `Run-ECHO.bat`. Double-click it to build if needed, migrate the database,
+  start the local backend and open the browser. Use `.\Run-ECHO.bat --build` to
+  rebuild an existing dashboard. Press Ctrl+C in the launcher to stop ECHO.
+- Updated the app CLI, dashboard and security middleware, dashboard components,
+  client, styles, Vite proxy and the corresponding backend and browser tests.
+  No schema or dependency changes were needed for this update.
+- `.venv\Scripts\python.exe -m pytest -q backend/tests/test_api.py backend/tests/test_dashboard.py backend/tests/test_cli.py --tb=short`
+  returned **`56 passed in 51.99s`**. This includes real loopback startup without
+  a configured token and the startup route's browser access rules.
+- A Windows launcher smoke test started `Run-ECHO.bat` from a different
+  directory with a fresh temporary library, a custom port, and a test browser
+  opener. It confirmed migration, HTTP readiness, and the browser URL. The live
+  library and running user server were left untouched.
+- In `frontend`, `npm test` returned **`14 passed (2.2m)`**, including direct
+  startup, retry, automatic renewal, proxy validation and existing workflows.
+  `npm run build` and `npm run format:check` passed.
+
 ## M7 implementation — 2026-11-24
 
 - OCR for PNG/JPEG and scanned and mixed PDF pages uses local Tesseract data.

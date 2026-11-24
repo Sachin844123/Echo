@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — opt-in local storage indexing
+
+- Add storage consent, four access levels, and persistent folder and type filters.
+- Discover eligible local files, monitor Windows changes with watchdog, and
+  incrementally import through the existing retrieval pipeline.
+- Add indexing status, pause, resume, cancel, rescan, and permission revocation
+  with cleanup of automatically indexed copies. Preserve manual imports.
+- Verified with 303 backend tests, 14 browser and proxy tests, targeted browser
+  checks after the final UI edits, and a production build.
+
 ## Unreleased — direct dashboard startup
 
 - Open the workspace without a login form or token entry. Keep API requests

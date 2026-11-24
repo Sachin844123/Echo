@@ -1,6 +1,6 @@
 export type SourceType = 'pdf' | 'txt' | 'markdown' | 'docx' | 'note' | 'image'
 export type Mode = 'keyword' | 'semantic' | 'hybrid' | 'hybrid_contextual' | 'visual'
-export type View = 'Search' | 'Library' | 'Collections' | 'Sources' | 'Settings'
+export type View = 'Search' | 'Library' | 'Collections' | 'Sources' | 'Storage' | 'Settings'
 export interface Source {
   id: number
   source_type: SourceType

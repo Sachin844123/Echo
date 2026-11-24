@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — direct dashboard startup
+
+- Open the workspace without a login form or token entry. Keep API requests
+  authenticated with an automatic, memory-only browser credential.
+- Add `Run-ECHO.bat` to build the dashboard if needed, migrate the local
+  database, start ECHO and open the default browser.
+- Verified with 56 backend tests, 14 browser/proxy tests, a production build
+  and an isolated Windows launcher smoke test.
+
 ## Unreleased — M7 OCR, image search and retrieval coverage
 
 - Read text in scanned PDF pages and PNG/JPEG images with local Tesseract.

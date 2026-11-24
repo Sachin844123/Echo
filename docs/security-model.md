@@ -1,8 +1,8 @@
 # Local security model — M1–M7
 
-ECHO is a single-user local process. The primary boundaries are the HTTP server,
-the local session token and the user's filesystem permissions. It is not a
-multi-user service and has no account system.
+ECHO is a single-user local process. The primary boundaries are the loopback
+HTTP server, browser origin checks and the user's filesystem permissions.
+The dashboard opens directly for people using the running local browser.
 
 ## Implemented
 
@@ -12,10 +12,14 @@ multi-user service and has no account system.
 - Every HTTP API request requires a bearer token, including health, errors
   reached by unknown routes and ordinary OPTIONS requests. No query-string or
   cookie authentication. Duplicate Authorization headers fail closed.
-- Token generation uses 32 random bytes. Secrets are passed via the process
-  environment, never stored in SQLite, a token file or application logs. Use a
-  fresh generated token per session. A token lasts until server shutdown;
-  restarting with a new token revokes the previous session.
+- `POST /session/open` is a dashboard startup route outside the protected API.
+  It requires a permitted local origin, `Sec-Fetch-Site: same-origin` and the
+  `X-Echo-Dashboard` header, which cross-origin preflights do not permit. It
+  returns only the runtime dashboard credential with `Cache-Control: no-store`.
+  The browser uses that credential for API requests and renews it after a
+  rejected stale credential. The server creates it from 32 random bytes on
+  each app start. An optional `ECHO_SESSION_TOKEN` for native clients is never
+  returned to the dashboard.
 - The peer must be 127.0.0.1. Exact Host validation permits only 127.0.0.1 or
   localhost with the configured port, mitigating browser DNS rebinding.
   Duplicate Host/Origin headers are rejected. Proxy headers cannot change the
@@ -24,8 +28,8 @@ multi-user service and has no account system.
   null origins, userinfo, nonlocal hosts, non-HTTP schemes, paths, queries and
   fragments are rejected. Native clients may omit Origin but still need the
   token. Origin and CORS are additional browser boundaries, not authentication.
-- Login and import use an authenticated, body-free POST session check so browsers
-  send Origin before document transfer. The Vite proxy preserves Origin and token
+- Imports use an authenticated, body-free POST session check so browsers
+  send Origin before transferring a document. The Vite proxy preserves Origin and token
   checks. Development requires explicitly allowing its exact loopback origin
   before backend startup; no Origin rewriting or broad default allowance is used.
   Proxy transport diagnostics omit request URLs, filenames and raw error stacks.
@@ -42,17 +46,16 @@ multi-user service and has no account system.
   OCR runs in the timed parser subprocess. CLIP loads verified local weights
   and uses no network at runtime. Visual deletion purges the source vector
   and any obsolete snapshots through the existing tombstone cleanup.
-- M6 exposes only GET/HEAD `/`, `/favicon.svg` and `/assets/*` without a token.
-  These serve the locally built empty shell and compiled assets, never data or
-  credentials. Every API route remains authenticated. Host/Origin/peer checks
-  also apply to static content. StaticFiles confines asset access to the build.
+- GET/HEAD `/`, `/favicon.svg` and `/assets/*` serve the empty shell and compiled
+  assets without a token. Host, Origin and peer checks apply to static content
+  too. StaticFiles confines asset access to the build.
 - Production responses add a restrictive self-only script/style/connect CSP,
   no inline scripts/styles, no framing, no referrers and disabled camera,
   microphone and geolocation permissions. Framework parameter validation is
   redacted instead of echoing user-supplied values.
-- The dashboard keeps its token and document/query state in tab memory, aborts
-  outstanding requests on lock and locks again on reload. Only a versioned
-  theme preference persists. Previews are React text nodes, never imported HTML.
+- The dashboard keeps its credential and document/query state in tab memory.
+  Reloading opens a fresh dashboard connection. Only a versioned theme
+  preference persists. Previews render text instead of imported HTML.
   There is no service worker or browser-side content/history cache.
 - Structured logs use a field/event allowlist. Content, queries, URLs, paths,
   tokens, headers, SQL parameters, exception messages and tracebacks are
@@ -126,6 +129,10 @@ tokens, but retain opaque IDs/hashes and judgments-derived metrics; these can
 still be sensitive. Private corpus copies remain on disk for auditing. Default
 run and dataset data are Git-ignored. CLI errors use fixed safe codes. Split
 validation supports experimental discipline, not access control over test labels.
+
+Anyone with access to the running desktop browser can open ECHO. Local programs
+can also construct a loopback request meeting the dashboard startup checks.
+Stop ECHO or lock the operating-system session when leaving a shared machine.
 
 The local filesystem is not encrypted by ECHO. The process environment is not
 a secret vault. Same-user malware, an administrator or a debugger can read

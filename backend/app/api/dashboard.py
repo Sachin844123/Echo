@@ -56,6 +56,7 @@ def settings(request: Request):
 async def delete_library(request: Request):
     await read_input(request, DeleteLibraryInput)
     service, search = request.app.state.ingestion, request.app.state.search
+    local_indexing = request.app.state.local_indexing
 
     def reset():
         with service.mutation_lock:
@@ -65,6 +66,8 @@ async def delete_library(request: Request):
                 session.execute(update(Source).values(is_deleted=True))
                 session.execute(delete(Collection))
                 session.execute(delete(AppSetting))
+                access = local_indexing.library_reset(session)
+            local_indexing.refresh_access(access)
             # Durable tombstones use the same crash-recovery path as single deletion.
             search.finish_deletions()
             with search.sessions() as session:

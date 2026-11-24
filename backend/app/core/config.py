@@ -45,6 +45,11 @@ class Settings(BaseModel):
     max_pdf_pages: int = Field(default=2000, ge=1, le=10000)
     max_docx_expanded_bytes: int = Field(default=64 * 1024 * 1024, ge=1024, le=256 * 1024 * 1024)
     extraction_timeout_seconds: int = Field(default=120, ge=1, le=600)
+    ocr_enabled: bool = True
+    ocr_languages: str = Field(default="eng", pattern=r"^[a-z]{3}(?:\+[a-z]{3}){0,3}$")
+    ocr_data_dir: Path = REPO_ROOT / ".local" / "models" / "tessdata"
+    ocr_dpi: int = Field(default=200, ge=100, le=300)
+    max_image_pixels: int = Field(default=20_000_000, ge=10000, le=40_000_000)
     chunk_tokens: int = Field(default=350, ge=10, le=2000)
     chunk_overlap: int = Field(default=60, ge=0, le=1000)
     max_job_attempts: int = Field(default=3, ge=1, le=10)
@@ -53,12 +58,17 @@ class Settings(BaseModel):
     embedding_model_dir: Path = REPO_ROOT / ".local" / "models" / "all-MiniLM-L6-v2"
     embedding_batch_size: int = Field(default=16, ge=1, le=64)
     embedding_threads: int = Field(default=2, ge=1, le=8)
+    visual_model_dir: Path = REPO_ROOT / ".local" / "models" / "clip-vit-base-patch32"
+    visual_indexing_enabled: bool = True
     candidate_pool: int = Field(default=50, ge=10, le=200)
+    retrieval_profile: Literal["classic", "source_balanced"] = "source_balanced"
+    candidate_scan_limit: int = Field(default=2000, ge=200, le=10000)
+    spelling_correction: bool = True
     result_limit: int = Field(default=10, ge=1, le=50)
     rrf_k: int = Field(default=60, ge=1, le=1000)
     rerank_weights: RerankWeights = Field(default_factory=RerankWeights)
 
-    @field_validator("data_dir", "embedding_model_dir")
+    @field_validator("data_dir", "embedding_model_dir", "ocr_data_dir", "visual_model_dir")
     @classmethod
     def resolve_data_dir(cls, value: Path) -> Path:
         return value.expanduser().resolve()
@@ -113,13 +123,19 @@ class Settings(BaseModel):
             "ECHO_MAX_PDF_PAGES": "max_pdf_pages",
             "ECHO_MAX_DOCX_EXPANDED_BYTES": "max_docx_expanded_bytes",
             "ECHO_EXTRACTION_TIMEOUT_SECONDS": "extraction_timeout_seconds",
+            "ECHO_OCR_ENABLED": "ocr_enabled", "ECHO_OCR_LANGUAGES": "ocr_languages",
+            "ECHO_OCR_DATA_DIR": "ocr_data_dir", "ECHO_OCR_DPI": "ocr_dpi",
+            "ECHO_MAX_IMAGE_PIXELS": "max_image_pixels",
             "ECHO_CHUNK_TOKENS": "chunk_tokens", "ECHO_CHUNK_OVERLAP": "chunk_overlap",
             "ECHO_MAX_JOB_ATTEMPTS": "max_job_attempts", "ECHO_MAX_PENDING_JOBS": "max_pending_jobs",
             "ECHO_EMBEDDING_MODEL_NAME": "embedding_model_name",
             "ECHO_EMBEDDING_MODEL_DIR": "embedding_model_dir",
             "ECHO_EMBEDDING_BATCH_SIZE": "embedding_batch_size",
             "ECHO_EMBEDDING_THREADS": "embedding_threads",
+            "ECHO_VISUAL_MODEL_DIR": "visual_model_dir",
             "ECHO_CANDIDATE_POOL": "candidate_pool", "ECHO_RESULT_LIMIT": "result_limit",
+            "ECHO_RETRIEVAL_PROFILE": "retrieval_profile", "ECHO_CANDIDATE_SCAN_LIMIT": "candidate_scan_limit",
+            "ECHO_SPELLING_CORRECTION": "spelling_correction",
             "ECHO_RRF_K": "rrf_k",
         }
         values = {field: os.environ[name] for name, field in names.items() if name in os.environ}

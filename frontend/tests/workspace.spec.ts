@@ -18,10 +18,8 @@ test.afterEach(async ({ page }) => {
 })
 
 const token = () => process.env.ECHO_E2E_TOKEN!
-async function connect(page: Page) {
+async function openWorkspace(page: Page) {
   await page.goto('/')
-  await page.getByLabel('Session token', { exact: true }).fill(token())
-  await page.getByRole('button', { name: 'Open workspace', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Find it again.' })).toBeVisible()
 }
 async function navigate(page: Page, name: string) {
@@ -63,43 +61,37 @@ test.beforeEach(async ({ request }) => {
   expect(response.ok()).toBeTruthy()
 })
 
-test('session token is memory-only, errors are visible, lock and reload clear the session', async ({
+test('the workspace opens directly on first visit and reload without browser credential storage', async ({
   page,
 }) => {
-  await page.goto('/')
-  await page.getByLabel('Session token', { exact: true }).fill('invalid'.repeat(8))
-  await page.getByRole('button', { name: 'Open workspace' }).click()
-  await expect(page.getByRole('alert')).toContainText('Session token')
-  await page.getByLabel('Session token', { exact: true }).fill(token())
-  await page.getByRole('button', { name: 'Open workspace' }).click()
-  await expect(page.getByRole('heading', { name: 'Find it again.' })).toBeVisible()
-  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain(
-    token(),
-  )
-  expect(await page.evaluate(() => sessionStorage.length)).toBe(0)
-  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click()
-  await expect(page.getByLabel('Session token', { exact: true })).toHaveValue('')
-  await connect(page)
+  await openWorkspace(page)
+  await expect(page.getByLabel('Session token', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Lock workspace' })).toHaveCount(0)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Find it again.' })).toBeVisible()
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['echo.theme.v1'])
+  expect(await page.evaluate(() => sessionStorage.length)).toBe(0)
+  expect(await page.context().cookies()).toEqual([])
 })
 
-test('rejected browser origin prevents login with actionable guidance', async ({ page }) => {
-  await page.route('**/api/v1/session/check', (route) => {
+test('an origin rejection explains the setup issue and startup can be retried', async ({
+  page,
+}) => {
+  await page.route('**/session/open', (route) => {
     expect(route.request().method()).toBe('POST')
     return route.fulfill({ status: 403, json: { detail: 'Origin not allowed' } })
   })
   await page.goto('/')
-  await page.getByLabel('Session token', { exact: true }).fill(token())
-  await page.getByRole('button', { name: 'Open workspace', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('ECHO_ALLOWED_ORIGINS')
-  await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible()
+  await page.unroute('**/session/open')
+  await page.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Find it again.' })).toBeVisible()
 })
 
 test('origin check prevents file transfer and permits retry after configuration is fixed', async ({
   page,
 }) => {
-  await connect(page)
+  await openWorkspace(page)
   let uploads = 0
   page.on('request', (request) => {
     if (request.url().includes('/api/v1/imports/files')) uploads++
@@ -128,7 +120,7 @@ test('origin check prevents file transfer and permits retry after configuration 
 test('import, duplicate detection, keyword search, matched preview, rename and single deletion', async ({
   page,
 }) => {
-  await connect(page)
+  await openWorkspace(page)
   await addNote(
     page,
     'TEST DATA Solar research',
@@ -163,7 +155,7 @@ test('import, duplicate detection, keyword search, matched preview, rename and s
 })
 
 test('file upload, collection membership and filters use real data', async ({ page }) => {
-  await connect(page)
+  await openWorkspace(page)
   await page.getByRole('button', { name: 'Import', exact: true }).click()
   await page.locator('input[type=file]').setInputFiles({
     name: 'TEST-DATA-tides.txt',
@@ -202,7 +194,7 @@ test('file upload, collection membership and filters use real data', async ({ pa
 
 test('image OCR, visual search and authenticated image preview work locally', async ({ page }) => {
   test.setTimeout(120000)
-  await connect(page)
+  await openWorkspace(page)
   await page.getByRole('button', { name: 'Import', exact: true }).click()
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/TEST-DATA-scan.png')
   await page
@@ -241,7 +233,7 @@ test('image OCR, visual search and authenticated image preview work locally', as
 })
 
 test('spelling correction is visible and can be disabled', async ({ page }) => {
-  await connect(page)
+  await openWorkspace(page)
   await addNote(
     page,
     'TEST DATA Guidelines for FP',
@@ -262,7 +254,7 @@ test('spelling correction is visible and can be disabled', async ({ page }) => {
 test('processing errors, explicit semantic failure, context controls and retry remain visible', async ({
   page,
 }) => {
-  await connect(page)
+  await openWorkspace(page)
   await addNote(
     page,
     'TEST DATA Index failure',
@@ -289,7 +281,7 @@ test('processing errors, explicit semantic failure, context controls and retry r
 test('delete-all requires typed confirmation and removes documents and collections', async ({
   page,
 }) => {
-  await connect(page)
+  await openWorkspace(page)
   await addNote(page, 'TEST DATA delete all', 'TEST DATA Disposable browser-test note.')
   await navigate(page, 'Settings')
   await page.getByRole('button', { name: 'Delete all content', exact: true }).click()
@@ -310,10 +302,7 @@ test('keyboard navigation, modal focus, themes, responsive layout and accessibil
     (
       await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
     ).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))
-  await page.goto('/')
-  await page.screenshot({ path: 'test-results/connect-light.png', fullPage: true })
-  expect(await violations()).toEqual([])
-  await connect(page)
+  await openWorkspace(page)
   await page.keyboard.press('Control+k')
   await expect(page.getByRole('textbox', { name: 'What do you remember?' })).toBeFocused()
   expect(await violations()).toEqual([])
@@ -341,7 +330,7 @@ test('keyboard navigation, modal focus, themes, responsive layout and accessibil
 test('queries are not persisted and stale search responses cannot overwrite newer input', async ({
   page,
 }) => {
-  await connect(page)
+  await openWorkspace(page)
   let release!: () => void
   const gate = new Promise<void>((resolve) => {
     release = resolve
@@ -366,24 +355,28 @@ test('queries are not persisted and stale search responses cannot overwrite newe
   )
 })
 
-test('connection failure is recoverable and unauthorized responses lock the workspace', async ({
+test('connection failure is recoverable and an expired session renews automatically', async ({
   page,
 }) => {
-  await connect(page)
+  await openWorkspace(page)
   await page.route('**/api/v1/sources?**', (route) => route.abort('connectionrefused'))
   await navigate(page, 'Library')
   await expect(page.getByRole('alert')).toContainText('Cannot reach ECHO')
   await page.unroute('**/api/v1/sources?**')
   await page.getByRole('button', { name: 'Retry', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Make room for what matters.' })).toBeVisible()
-  await page.route('**/api/v1/sources?**', (route) =>
-    route.fulfill({
-      status: 401,
-      contentType: 'application/json',
-      body: '{"detail":"Valid session token required"}',
-    }),
+  let requests = 0
+  await page.route('**/api/v1/sources?**', (route) => {
+    requests++
+    return requests === 1
+      ? route.fulfill({ status: 401, json: { detail: 'Valid session token required' } })
+      : route.continue()
+  })
+  const renewed = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/session/open' && response.ok(),
   )
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible()
-  await expect(page.getByLabel('Session token', { exact: true })).toHaveValue('')
+  await renewed
+  await expect(page.getByRole('heading', { name: 'Make room for what matters.' })).toBeVisible()
+  expect(requests).toBe(2)
 })

@@ -31,10 +31,14 @@ def main() -> int:
         if args.command == "migrate":
             settings.data_dir.mkdir(parents=True, exist_ok=True)
             engine = create_sqlite_engine(settings.database_path)
+            from app.storage.instance_lock import InstanceLock
+            ownership = InstanceLock(settings.data_dir / "ingestion.lock")
             try:
+                ownership.acquire()
                 upgrade_database(engine)
                 check_database(engine)
             finally:
+                ownership.release()
                 engine.dispose()
             logging.getLogger("echo.cli").info("migration_complete")
         elif args.command == "rebuild-index":

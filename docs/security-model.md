@@ -6,6 +6,12 @@ The dashboard opens directly for people using the running local browser.
 
 ## Implemented
 
+- Automatic storage indexing requires a persisted opt-in scope. Only approved,
+  eligible paths are read. The original files remain in place. The storage
+  endpoints are authenticated, and revocation tombstones automatic-only sources
+  for local cleanup. See [Storage & Permissions](local-storage.md) for the path
+  checks, storage caps and sensitive-file filtering limits.
+
 - The supported `python -m app serve` launcher binds to 127.0.0.1 only.
   Configuration rejects non-loopback bind addresses. One worker, no reload,
   no proxy trust, no WebSockets, no public docs/OpenAPI route.

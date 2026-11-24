@@ -1,4 +1,4 @@
-# Schema — revision 0002_retrieval
+# Schema — revision 0003_images
 
 M4 and M5 change no application tables or migrations. Evaluation creates a separate
 database at each new run's `corpus/echo.sqlite3` using this same schema. Its
@@ -8,6 +8,8 @@ Existing source titles, chunk headings and collection memberships supply signals
 M6 also adds no migration. Dashboard settings are a read-only configuration
 projection. Delete-all uses existing source tombstones/cascades and clears
 collections and app_settings; its upload-generation guard is process-local.
+M7 adds the `image` source type, the `visual` job stage and image embedding
+metadata. Existing text embedding records and chunk IDs stay valid.
 
 All required values are NOT NULL unless marked nullable below. Integer entity
 IDs use SQLite AUTOINCREMENT so deleted IDs cannot be reassigned. This matters
@@ -20,6 +22,7 @@ CASCADE and have a leading index (including unique/primary indexes).
 | documents | id; unique source_id FK; extracted_text; language (nullable); extraction_method; extraction_status; content_length; created_at |
 | chunks | id; document_id FK; chunk_index; chunk_text; token_count; page_number (nullable); heading (nullable); start_offset; end_offset; created_at |
 | embedding_records | id; unique chunk_id FK; model_name; model_version; unique vector_index_id; dimension; content_hash; created_at |
+| image_embedding_records | source_id PK/FK; model_name; model_version; dimension; content_hash; created_at |
 | collections | id; unique name; description (nullable); created_at; updated_at |
 | collection_items | composite PK (collection_id FK, source_id FK); created_at |
 | indexing_jobs | id; source_id FK; stage; status; attempts; error (nullable); created_at; updated_at |
@@ -32,10 +35,13 @@ operational configuration from the environment and stores no secrets here.
 
 ## Constraints and indexes
 
-- Source types: `pdf`, `txt`, `markdown`, `docx`, `note`. URL metadata does not
+- Source types: `pdf`, `txt`, `markdown`, `docx`, `note`, `image`. URL metadata does not
   implement webpage capture. Titles cannot be blank. Content hashes are unique
   lowercase 64-character SHA-256 hex values, calculated over the captured bytes.
   File paths are app-owned relative paths (`imports/<random-id>.<extension>`).
+- Visual embeddings use the imported source ID as their FAISS ID. A separate
+  snapshot stores normalized CLIP vectors. Reconciliation compares each record's
+  model name, version, dimension and original file hash with stored metadata.
 - Source processing status: `pending`, `processing`, `indexed`, `failed`.
   `is_deleted` is restricted to 0 or 1; 1 is a durable pending-deletion tombstone,
   not evidence of completed cleanup. Source indexes cover captured time, type + captured time,

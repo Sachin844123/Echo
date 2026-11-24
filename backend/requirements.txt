@@ -20,3 +20,5 @@ numpy>=1.26,<3
 Pillow>=11.3,<13
 # Directly used for CLIP; already required transitively by sentence-transformers.
 transformers>=5.23,<6
+# Native filesystem notifications for user-approved local folders.
+watchdog==6.0.0

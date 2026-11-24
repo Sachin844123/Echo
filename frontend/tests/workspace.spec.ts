@@ -38,18 +38,22 @@ async function addNote(page: Page, title: string, text: string) {
   await page.getByRole('button', { name: 'Save note', exact: true }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
 }
-async function waitForText(page: Page) {
+async function waitForText(page: Page, timeout = 15000) {
   await expect
-    .poll(async () => {
-      const response = await page.request.get('/api/v1/indexing-jobs?limit=100', {
-        headers: { Authorization: `Bearer ${token()}` },
-      })
-      const body = await response.json()
-      return body.items
-        .filter((j: { stage: string; status: string }) => j.stage === 'ingestion')
-        .every((j: { status: string }) => j.status === 'succeeded')
-    })
-    .toBe(true)
+    .poll(
+      async () => {
+        const response = await page.request.get('/api/v1/indexing-jobs?limit=100', {
+          headers: { Authorization: `Bearer ${token()}` },
+        })
+        const body = await response.json()
+        return body.items
+          .filter((j: { stage: string; status: string }) => j.stage === 'ingestion')
+          .map((j: { status: string; error: { code: string } | null }) => j.error?.code ?? j.status)
+          .filter((status: string) => status !== 'succeeded')
+      },
+      { timeout },
+    )
+    .toEqual([])
 }
 test.beforeEach(async ({ request }) => {
   const response = await request.delete('/api/v1/library', {
@@ -194,6 +198,65 @@ test('file upload, collection membership and filters use real data', async ({ pa
   await page.getByLabel('File type', { exact: true }).selectOption('txt')
   await page.getByRole('button', { name: 'Search', exact: true }).last().click()
   await expect(page.getByRole('button', { name: 'Preview TEST-DATA-tides' })).toBeVisible()
+})
+
+test('image OCR, visual search and authenticated image preview work locally', async ({ page }) => {
+  test.setTimeout(120000)
+  await connect(page)
+  await page.getByRole('button', { name: 'Import', exact: true }).click()
+  await page.locator('input[type=file]').setInputFiles('tests/fixtures/TEST-DATA-scan.png')
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Import documents', exact: true })
+    .click()
+  await expect(page.getByText('Queued for processing', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  await waitForText(page, 45000)
+  await page.getByRole('button', { name: 'Keywords', exact: true }).click()
+  await page.getByRole('textbox', { name: 'What do you remember?' }).fill('orchid')
+  await page.getByLabel('File type', { exact: true }).selectOption('image')
+  await page.getByRole('button', { name: 'Search', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Preview TEST-DATA-scan' }).click()
+  await expect(page.getByRole('img', { name: 'TEST-DATA-scan', exact: true })).toBeVisible()
+  await expect(page.locator('.reading-text')).toContainText('ORCHID')
+  await page.screenshot({ path: 'test-results/image-ocr-preview.png', fullPage: true })
+  await page.getByRole('button', { name: 'Close preview', exact: true }).click()
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get('/api/v1/indexing-jobs', {
+          headers: { Authorization: `Bearer ${token()}` },
+        })
+        return (await response.json()).items.find(
+          (job: { stage: string }) => job.stage === 'visual',
+        )?.status
+      },
+      { timeout: 90000 },
+    )
+    .toBe('succeeded')
+  await page.getByRole('button', { name: 'Images', exact: true }).click()
+  await page.getByRole('textbox', { name: 'What do you remember?' }).fill('a page of printed text')
+  await page.getByRole('button', { name: 'Search', exact: true }).last().click()
+  await expect(page.getByRole('button', { name: 'Preview TEST-DATA-scan' })).toBeVisible()
+})
+
+test('spelling correction is visible and can be disabled', async ({ page }) => {
+  await connect(page)
+  await addNote(
+    page,
+    'TEST DATA Guidelines for FP',
+    'TEST DATA guidelines for FP submission and evaluation.',
+  )
+  await waitForText(page)
+  await page.getByRole('button', { name: 'Keywords', exact: true }).click()
+  await page.getByRole('textbox', { name: 'What do you remember?' }).fill('guideliness of fp')
+  await page.getByRole('button', { name: 'Search', exact: true }).last().click()
+  await expect(page.getByText(/Searching for: guidelines of fp/)).toBeVisible()
+  await page
+    .getByRole('checkbox', { name: 'Correct likely spelling mistakes using my library' })
+    .uncheck()
+  await page.getByRole('button', { name: 'Search', exact: true }).last().click()
+  await expect(page.getByText(/Searching for: guidelines of fp/)).not.toBeVisible()
 })
 
 test('processing errors, explicit semantic failure, context controls and retry remain visible', async ({

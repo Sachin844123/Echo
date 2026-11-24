@@ -1,10 +1,48 @@
 # ECHO progress
 
-## Current state — 2026-11-19 (Asia/Calcutta)
+## Current state — 2026-11-24 (Asia/Calcutta)
 
 **M1 through M6 LOCAL API HARDENING + DASHBOARD are complete and tested.**
-Stopped at the M6 boundary. Existing ingestion, retrieval and evaluation are
-preserved. Optional M7 is unstarted and requires explicit authorization.
+**M7 OCR, imported image search and retrieval coverage are complete and tested.**
+Webpage capture and packaging remain unstarted. React Bits is queued as a
+separate dashboard update after M7.
+
+## M7 implementation — 2026-11-24
+
+- OCR for PNG/JPEG and scanned and mixed PDF pages uses local Tesseract data.
+  Standalone image previews use the token-authenticated API. CLIP visual search
+  uses separate durable jobs and a FAISS snapshot.
+- Visible spelling correction uses the imported library vocabulary. The new
+  retrieval profile balances sources before fusion. The classic configuration
+  remains available in the text evaluation harness.
+- A read-only diagnostic on a temporary copy of the user's 13-source index
+  compared the supplied query with previous and current settings. The expected
+  source moved from 7th to 2nd for Keywords, stayed 7th for Meaning, moved from
+  6th to 4th for Hybrid and from 6th to 1st for Hybrid + context. This measures
+  one reported query. Broader accuracy requires labelled held-out queries.
+- Setup, operating limits and configuration are in [OCR and image search](images.md).
+
+### M7 files and verification
+
+- Backend changes cover `app/extraction`, `app/embeddings`, `app/retrieval`,
+  ingestion jobs, raster validation, secure previews and schema revision
+  `0003_images`. Tests in `test_images.py`, `test_query_quality.py` and
+  `test_database.py` cover the new paths. `scripts/prepare_image_models.py`
+  provisions the assets. The dashboard changes are in `frontend/src` and
+  `frontend/tests/workspace.spec.ts`. `evaluation/` records retrieval and OCR
+  configuration in the four text-method comparisons.
+- Repository root: `.venv\Scripts\python.exe -m pytest -q --tb=short` returned
+  **`288 passed in 306.70s (0:05:06)`**. English OCR and local CLIP integration
+  tests ran with installed assets. `pip check` reported no broken requirements.
+- In `frontend`: `npm test` returned **`14 passed (1.5m)`**. After the last UI
+  refinements, the four affected browser checks passed (`4 passed (1.3m)`) and
+  the final OCR preview check passed (`1 passed (58.1s)`). `npm run build` and
+  `npm run format:check` passed. The preview was visually checked with labelled
+  test data in Edge. The runner printed the inherited NO_COLOR/FORCE_COLOR warning.
+- Tests and the ranking diagnostic migrated isolated copies. The active library
+  was left at its existing schema. Stop ECHO, back up `.local`, run `python -m app
+  migrate` from `backend` using the workspace virtual environment, and restart
+  as shown in the [image setup guide](images.md).
 
 ## M6 development upload correction — 2026-11-19
 

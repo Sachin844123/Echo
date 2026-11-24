@@ -6,9 +6,10 @@ ECHO is a software-only research project exploring how people can find documents
 by describing what they remember. It operates on content the user explicitly
 imports, with local storage and a local API.
 
-The current release includes a local document dashboard, secure ingestion,
+ECHO includes a local document dashboard, secure ingestion,
 keyword/semantic/hybrid retrieval, contextual reranking and evaluation with
-tuning-only weight sweeps.
+tuning-only weight sweeps. M7 adds local OCR and image search by recognized text
+or visual description. See [OCR and image search](docs/images.md).
 ECHO cannot recover information that was never captured.
 
 [Quick start](#quick-start) · [API](#api) · [Configuration](#configuration) ·
@@ -21,7 +22,7 @@ ECHO cannot recover information that was never captured.
 | Available now | Planned |
 | --- | --- |
 | Local React dashboard with search, library and collections | Research findings from user-supplied data |
-| Validated imports, previews and recoverable indexing | Optional OCR and webpage capture, only on request |
+| Validated imports, previews and recoverable indexing | Optional webpage capture, only on request |
 | Keyword, semantic, hybrid and contextual hybrid search | |
 | Four-method evaluation and tuning-only weight sweeps | |
 | Authenticated loopback API, local sessions and recoverable deletion | |
@@ -56,7 +57,8 @@ No retrieval accuracy or performance results have been reported.
 
 | Format | Support | Notes |
 | --- | --- | --- |
-| PDF | Embedded text, page metadata | Password-protected and image-only PDFs are unsupported; OCR is not enabled |
+| PDF | Embedded text, local OCR, page metadata | OCR requires local language data. Password-protected files are unsupported. |
+| PNG / JPEG | Filename, local OCR and visual embeddings | See [OCR and image search](docs/images.md) for setup. |
 | TXT | UTF-8, optional UTF-8 BOM, BOM-marked UTF-16 | Legacy encodings and UTF-32 are rejected |
 | Markdown | Text and ATX heading metadata | Source markup is retained; headings inside fenced code are excluded |
 | DOCX | Body paragraphs, headings and tables, including nested tables | Ancillary content and complex layouts are not comprehensively extracted |
@@ -250,7 +252,7 @@ Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/v1/search' `
   -Headers $headers -ContentType 'application/json' -Body $body
 ```
 
-Use `keyword`, `semantic`, `hybrid` or `hybrid_contextual`. Optional filters are `source_types`,
+Use `keyword`, `semantic`, `hybrid`, `hybrid_contextual` or `visual`. Optional filters are `source_types`,
 `captured_from`, `captured_to` and `collection_id`; dates require an explicit
 timezone. Responses include one best excerpt per source, page/heading/offset
 references and an `indexing_incomplete` flag. Dates filter results without a
@@ -404,7 +406,7 @@ discipline and measurement limitations. No real study has been run yet.
 | M4 · Evaluation | Labelled-dataset harness, metrics, resource measurements and tuning/test split | Complete; study awaits user data |
 | M5 · Contextual reranking | Configurable normalized signals and tuning-only weight sweeps | Complete |
 | M6 · Dashboard and hardening | Local React dashboard and application security flows | Complete |
-| M7 · Optional extensions | OCR, webpage capture and packaging notes | Only on request |
+| M7 · OCR and image search | Scanned PDFs, text and visual image search, retrieval coverage | Complete for the authorized scope |
 
 Development proceeds one milestone at a time. Desktop packaging, browser
 extensions, mobile applications, cloud sync, accounts, PostgreSQL, local LLMs,

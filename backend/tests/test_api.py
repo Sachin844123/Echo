@@ -1,5 +1,3 @@
-import secrets
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
@@ -104,13 +102,14 @@ def test_uncaught_failure_is_redacted(client, app, auth, monkeypatch):
     assert response.json() == {"detail": "Internal server error"}
 
 
-def test_startup_requires_token(tmp_path):
-    with pytest.raises(ValueError, match="ECHO_SESSION_TOKEN"):
-        create_app(Settings(data_dir=tmp_path))
+def test_startup_uses_a_new_dashboard_session_per_application(tmp_path):
+    first = create_app(Settings(data_dir=tmp_path))
+    second = create_app(Settings(data_dir=tmp_path))
+    assert first.state.dashboard_session != second.state.dashboard_session
 
 
 def test_startup_requires_migration(tmp_path):
-    app = create_app(Settings(data_dir=tmp_path, session_token=secrets.token_urlsafe(32)))
+    app = create_app(Settings(data_dir=tmp_path))
     with pytest.raises(RuntimeError, match="migrate"):
         with TestClient(app):
             pass

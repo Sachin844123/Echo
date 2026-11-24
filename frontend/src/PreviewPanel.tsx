@@ -3,6 +3,7 @@ import { Api, errorText, useCollections, useGet } from './api'
 import { Confirm, ErrorBox, Icon, Loading, StatusBadge } from './components'
 import { dateLabel, sourceNames } from './types'
 import type { Preview, SearchHit, Source } from './types'
+import { ImagePreview } from './ImagePreview'
 
 export function PreviewPanel({
   api,
@@ -101,6 +102,25 @@ export function PreviewPanel({
             <div className="preview-actions">
               <button
                 className="button small"
+                disabled={busy || ['pending', 'processing'].includes(source.data.processing_status)}
+                onClick={async () => {
+                  setBusy(true)
+                  setError('')
+                  try {
+                    await api.request(`/api/v1/sources/${sourceId}/reprocess`, { method: 'POST' })
+                    changed('Reprocessing queued. Follow its progress in Sources.')
+                    setLocalRevision((r) => r + 1)
+                  } catch (failure) {
+                    setError(errorText(failure))
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                Reprocess
+              </button>
+              <button
+                className="button small"
                 onClick={() => {
                   setTitle(source.data!.title)
                   setRename((v) => !v)
@@ -149,6 +169,9 @@ export function PreviewPanel({
           </>
         ) : null}
         {error ? <ErrorBox message={error} /> : null}
+        {source.data?.source_type === 'image' ? (
+          <ImagePreview api={api} sourceId={sourceId} title={source.data.title} />
+        ) : null}
         {hit ? (
           <section className="matched-excerpt">
             <h3>Matched passage {hit.page_number ? <span>Page {hit.page_number}</span> : null}</h3>
@@ -158,6 +181,23 @@ export function PreviewPanel({
         ) : null}
         <section className="document-text">
           <h3>Document text</h3>
+          {preview.data?.extraction_method.startsWith('image_filename') ? (
+            <p className="fine-print">
+              {preview.data.extraction_method === 'image_filename'
+                ? 'No text was recognized.'
+                : 'OCR was unavailable for this import. Check Settings and reprocess after setup.'}{' '}
+              Showing the imported filename.
+            </p>
+          ) : preview.data?.extraction_method === 'pymupdf_text_ocr_unavailable' ? (
+            <p className="fine-print">
+              Showing the PDF text layer. Set up OCR and reprocess to read text in its images.
+            </p>
+          ) : preview.data?.extraction_method.includes('tesseract') ? (
+            <p className="fine-print">
+              Text includes local OCR. Recognition can contain errors; check the original when
+              precision matters.
+            </p>
+          ) : null}
           {preview.loading ? (
             <Loading label="Loading preview" />
           ) : preview.error ? (

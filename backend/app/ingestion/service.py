@@ -13,7 +13,7 @@ from sqlalchemy import Engine, delete, func, select
 
 from app.core.config import REPO_ROOT, Settings
 from app.database.engine import create_session_factory
-from app.database.models import Chunk, Document, EmbeddingRecord, ImageEmbeddingRecord, IndexingJob, Source
+from app.database.models import Chunk, Document, EmbeddingRecord, ImageEmbeddingRecord, IndexingJob, LocalAccess, Source
 from app.ingestion.errors import ERRORS, ImportFailure
 from app.retrieval.errors import MESSAGES, RetrievalFailure
 from app.processing.chunking import iter_chunks, read_segments
@@ -79,7 +79,8 @@ class IngestionService:
         self.store.recover_orphans(referenced)
         logger.info("jobs_recovered")
 
-    def enqueue(self, staged: Path, filename: str, digest: str, note_title: str | None = None, expected_generation: int | None = None) -> dict:
+    def enqueue(self, staged: Path, filename: str, digest: str, note_title: str | None = None,
+                expected_generation: int | None = None, *, register_local=None) -> dict:
         name = safe_filename(filename)
         detected = detect_file(staged, name, self.settings)
         source_type = "note" if note_title is not None else detected
@@ -93,6 +94,10 @@ class IngestionService:
                     if duplicate.is_deleted:
                         raise RetrievalFailure("source_deleted", 409)
                     job = session.scalar(select(IndexingJob).where(IndexingJob.source_id == duplicate.id).order_by(IndexingJob.id.desc()).limit(1))
+                    if register_local is None:
+                        duplicate.manual_capture = True
+                    else:
+                        register_local(session, duplicate)
                     return {"source_id": duplicate.id, "job_id": job.id if job else None, "duplicate": True}
                 pending = session.scalar(select(func.count()).select_from(IndexingJob).where(IndexingJob.status.in_(["pending", "running"])))
                 if pending >= self.settings.max_pending_jobs:
@@ -100,6 +105,7 @@ class IngestionService:
                 adopted = self.store.adopt(staged, source_type)
                 source = Source(
                     source_type=source_type, title=note_title or Path(name).stem,
+                    manual_capture=register_local is None,
                     file_path=adopted, mime_type=(image_header(self.store.resolve(adopted), self.settings.max_image_pixels)[0]
                                                 if source_type == "image" else MIMES[source_type]), content_hash=digest,
                 )
@@ -108,6 +114,8 @@ class IngestionService:
                 job = IndexingJob(source_id=source.id)
                 session.add(job)
                 session.flush()
+                if register_local is not None:
+                    register_local(session, source)
                 response = {"source_id": source.id, "job_id": job.id, "duplicate": False}
             # File publication precedes DB commit. A crash leaves an orphan removed at startup.
             self.wake.set()
@@ -214,7 +222,10 @@ class IngestionService:
 
     def _claim(self) -> tuple[int, int] | None:
         with self.mutation_lock, self.sessions.begin() as session:
-            job = session.scalar(select(IndexingJob).join(Source).where(IndexingJob.status == "pending", Source.is_deleted.is_(False)).order_by(IndexingJob.id).limit(1))
+            active = select(LocalAccess.id).where(LocalAccess.id == 1, LocalAccess.mode != "deny", LocalAccess.state == "active").exists()
+            job = session.scalar(select(IndexingJob).join(Source).where(
+                IndexingJob.status == "pending", Source.is_deleted.is_(False),
+                Source.manual_capture.is_(True) | active).order_by(IndexingJob.id).limit(1))
             if job is None:
                 return None
             if job.attempts >= self.settings.max_job_attempts:

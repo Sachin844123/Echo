@@ -1,10 +1,12 @@
 """Application factory with no database mutation at import time."""
 
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from pydantic import SecretStr
 from starlette.responses import FileResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -23,7 +25,7 @@ from app.api.search import router as search_router, retrieval_failure_handler
 from app.api.sources import router as sources_router
 from app.retrieval.engine import SearchEngine
 from app.retrieval.errors import RetrievalFailure
-from app.api.dashboard import router as dashboard_router
+from app.api.dashboard import router as dashboard_router, session_router
 
 
 logger = logging.getLogger("echo.app")
@@ -31,8 +33,7 @@ logger = logging.getLogger("echo.app")
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    if settings.session_token is None:
-        raise ValueError("ECHO_SESSION_TOKEN is required; generate it with python -m app token")
+    dashboard_session = SecretStr(secrets.token_urlsafe(32))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -64,17 +65,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="ECHO", version=__version__, lifespan=lifespan,
         docs_url=None, redoc_url=None, openapi_url=None, debug=False,
     )
+    app.state.dashboard_session = dashboard_session
     app.add_middleware(
         CORSMiddleware, allow_origins=list(settings.allowed_origins),
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"],
         allow_credentials=False, expose_headers=["X-Request-ID"], max_age=600,
     )
-    app.add_middleware(LocalSecurityMiddleware, settings=settings)
+    app.add_middleware(LocalSecurityMiddleware, settings=settings, dashboard_session=dashboard_session)
     app.include_router(router)
     app.include_router(ingestion_router)
     app.include_router(search_router)
     app.include_router(sources_router)
     app.include_router(dashboard_router)
+    app.include_router(session_router)
     app.add_exception_handler(ImportFailure, import_failure_handler)
     app.add_exception_handler(RetrievalFailure, retrieval_failure_handler)
 

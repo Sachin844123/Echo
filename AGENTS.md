@@ -16,7 +16,8 @@ Use Python 3.11+, pathlib, Pydantic v2, SQLAlchemy 2.x and SQLite. Windows 11
 is the primary environment. Keep dependencies minimal and justify additions.
 Never log content, tokens, query text, file paths, SQL parameters or raw
 exception messages. Never commit secrets or local data. The supported server
-must bind to 127.0.0.1 and require a token on every API request.
+must bind to 127.0.0.1 and authenticate data API requests. The dashboard opens
+directly using a guarded same-origin startup route and a memory-only credential.
 
 No frontend before M6. No desktop packaging, extensions, mobile, cloud sync,
 accounts, PostgreSQL, local LLMs, orchestration frameworks or vector servers.

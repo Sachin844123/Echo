@@ -1,6 +1,7 @@
 """Explicit schema upgrades; API startup only verifies the revision."""
 
 import sqlite3
+from contextlib import contextmanager
 
 from alembic import command
 from alembic.config import Config
@@ -18,9 +19,29 @@ def alembic_config() -> Config:
     return config
 
 
+@contextmanager
+def migration_connection(engine: Engine):
+    """Rebuild SQLite parent tables atomically without triggering child cascades.
+
+    Disable FK actions on this connection before BEGIN, check all relationships
+    before COMMIT, and restore enforcement even when a migration rolls back.
+    The supported CLI also holds the library's exclusive instance lock.
+    """
+    with engine.connect() as connection:
+        raw = connection.connection.driver_connection
+        raw.execute("PRAGMA foreign_keys=OFF")
+        try:
+            with connection.begin():
+                yield connection
+                if connection.exec_driver_sql("PRAGMA foreign_key_check").first() is not None:
+                    raise RuntimeError("migration foreign key validation failed")
+        finally:
+            raw.execute("PRAGMA foreign_keys=ON")
+
+
 def upgrade_database(engine: Engine) -> None:
     config = alembic_config()
-    with engine.begin() as connection:
+    with migration_connection(engine) as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
 

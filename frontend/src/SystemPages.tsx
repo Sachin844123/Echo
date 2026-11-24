@@ -91,7 +91,11 @@ export function SourcesPage({
                           {job.title}
                         </button>
                         <p>
-                          {job.stage === 'ingestion' ? 'Text extraction' : 'Search indexing'}
+                          {job.stage === 'ingestion'
+                            ? 'Text extraction'
+                            : job.stage === 'visual'
+                              ? 'Visual indexing'
+                              : 'Text indexing'}
                           <span aria-hidden="true"> · </span>Attempt {job.attempts}
                         </p>
                       </div>
@@ -237,6 +241,29 @@ export function SettingsPage({
         ) : settings.data ? (
           <>
             <dl className="configuration">
+              <div>
+                <dt>OCR</dt>
+                <dd>
+                  {settings.data.ocr.available
+                    ? 'Ready locally'
+                    : settings.data.ocr.enabled
+                      ? 'Language data unavailable'
+                      : 'Disabled'}{' '}
+                  ({settings.data.ocr.languages.join(' + ')})
+                </dd>
+              </div>
+              <div>
+                <dt>Visual image search</dt>
+                <dd>
+                  {status?.visual?.available
+                    ? `Ready locally · ${status.visual.image_count} images`
+                    : 'Local CLIP model unavailable'}
+                </dd>
+              </div>
+              <div>
+                <dt>Retrieval profile</dt>
+                <dd>{settings.data.retrieval.retrieval_profile}</dd>
+              </div>
               <div>
                 <dt>Embedding model</dt>
                 <dd>{settings.data.retrieval.embedding_model_name}</dd>

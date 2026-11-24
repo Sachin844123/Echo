@@ -10,6 +10,44 @@ from app.ingestion.errors import ImportFailure
 from test_search_api import import_note
 
 
+BOOTSTRAP_HEADERS = {'Origin': 'http://127.0.0.1:8000', 'Sec-Fetch-Site': 'same-origin', 'X-Echo-Dashboard': '1'}
+
+
+def test_dashboard_opens_without_login_and_does_not_return_the_native_token(client, auth):
+    response = client.post('/session/open', headers=BOOTSTRAP_HEADERS)
+    assert response.status_code == 200
+    assert response.headers['cache-control'] == 'no-store'
+    assert 'set-cookie' not in response.headers
+    dashboard_auth = {'Authorization': 'Bearer ' + response.json()['session']}
+    assert dashboard_auth != auth
+    assert client.get('/api/v1/sources', headers=dashboard_auth).status_code == 200
+    assert client.get('/api/v1/sources', headers=auth).status_code == 200
+    assert client.get('/api/v1/sources').status_code == 401
+    assert client.get('/session/open').status_code == 401
+
+
+@pytest.mark.parametrize('headers', [
+    {}, {'Origin': BOOTSTRAP_HEADERS['Origin']},
+    {**BOOTSTRAP_HEADERS, 'Sec-Fetch-Site': 'same-site'},
+    {**BOOTSTRAP_HEADERS, 'Sec-Fetch-Site': 'cross-site'},
+    {**BOOTSTRAP_HEADERS, 'Origin': 'https://untrusted.example'},
+    {**BOOTSTRAP_HEADERS, 'Origin': 'null'},
+    {**BOOTSTRAP_HEADERS, 'X-Echo-Dashboard': 'invalid'},
+])
+def test_dashboard_bootstrap_rejects_untrusted_contexts(client, headers):
+    response = client.post('/session/open', headers=headers)
+    assert response.status_code == 403
+    assert 'session' not in response.json()
+
+
+def test_dashboard_bootstrap_header_is_not_allowed_in_cross_origin_preflight(client):
+    response = client.options('/session/open', headers={
+        'Origin': BOOTSTRAP_HEADERS['Origin'], 'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'x-echo-dashboard',
+    })
+    assert response.status_code == 400
+
+
 def test_session_check_requires_token_and_exact_origin(client, auth):
     path = '/api/v1/session/check'
     assert client.post(path).status_code == 401

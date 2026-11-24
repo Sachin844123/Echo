@@ -11,22 +11,79 @@ export class ApiError extends Error {
   }
 }
 
-/** A session is memory-only. Disposal cancels all reads and prevents later writes. */
+function requestError(
+  status: number,
+  body: { detail?: string; error?: { code?: string; message?: string } } | null,
+) {
+  if (status === 403 && body?.detail === 'Origin not allowed')
+    return new ApiError(
+      403,
+      'origin_not_allowed',
+      'This dashboard address is not allowed by the local server. Open ECHO from the address shown in its terminal, or check ECHO_ALLOWED_ORIGINS in frontend/README.md.',
+    )
+  return new ApiError(
+    status,
+    body?.error?.code ?? 'request_failed',
+    body?.error?.message ??
+      (status === 401
+        ? 'The local connection expired. Try again.'
+        : 'The request could not be completed. Check the local server and try again.'),
+  )
+}
+
+/** The dashboard obtains its session automatically and keeps it in memory. */
 export class Api {
   private pending = new Set<AbortController>()
-  private disposed = false
-  constructor(
-    private token: string,
-    private unauthorized: () => void,
-  ) {}
+  private lifetime = new AbortController()
+  private token = ''
+  private connecting?: Promise<void>
   dispose() {
-    this.disposed = true
+    this.lifetime.abort()
     this.token = ''
     this.pending.forEach((c) => c.abort())
     this.pending.clear()
   }
+  start(): Promise<void> {
+    this.lifetime.signal.throwIfAborted()
+    if (this.token) return Promise.resolve()
+    if (!this.connecting)
+      this.connecting = this.openSession().finally(() => {
+        this.connecting = undefined
+      })
+    return this.connecting
+  }
+  private async openSession() {
+    try {
+      const response = await fetch('/session/open', {
+        method: 'POST',
+        mode: 'same-origin',
+        credentials: 'omit',
+        redirect: 'error',
+        cache: 'no-store',
+        headers: { 'X-Echo-Dashboard': '1' },
+        signal: this.lifetime.signal,
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) throw requestError(response.status, body)
+      if (typeof body?.session !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(body.session))
+        throw new ApiError(
+          response.status,
+          'invalid_session',
+          'The local server returned an invalid session. Restart ECHO and try again.',
+        )
+      this.lifetime.signal.throwIfAborted()
+      this.token = body.session
+    } catch (error) {
+      if (error instanceof ApiError || this.lifetime.signal.aborted) throw error
+      throw new ApiError(
+        0,
+        'connection_failed',
+        'Cannot reach ECHO. Start the local server and try again.',
+      )
+    }
+  }
   async request<T>(path: string, options: RequestInit = {}, binary = false): Promise<T> {
-    if (this.disposed) throw new DOMException('Session closed', 'AbortError')
+    this.lifetime.signal.throwIfAborted()
     if (!path.startsWith('/api/v1/')) throw new Error('Invalid API path')
     const controller = new AbortController()
     this.pending.add(controller)
@@ -34,33 +91,33 @@ export class Api {
     options.signal?.addEventListener('abort', abort, { once: true })
     if (options.signal?.aborted) controller.abort()
     try {
-      const response = await fetch(path, {
-        ...options,
-        signal: controller.signal,
-        cache: 'no-store',
-        credentials: 'omit',
-        redirect: 'error',
-        referrerPolicy: 'no-referrer',
-        headers: { ...options.headers, Authorization: `Bearer ${this.token}` },
-      })
+      const send = (token: string) => {
+        controller.signal.throwIfAborted()
+        const headers = new Headers(options.headers)
+        headers.set('Authorization', `Bearer ${token}`)
+        return fetch(path, {
+          ...options,
+          headers,
+          signal: controller.signal,
+          cache: 'no-store',
+          credentials: 'omit',
+          redirect: 'error',
+          referrerPolicy: 'no-referrer',
+        })
+      }
+      await this.start()
+      const sentToken = this.token
+      let response = await send(sentToken)
+      if (response.status === 401) {
+        // The server rejects a stale session before the route reads or changes data.
+        await response.body?.cancel()
+        if (this.token === sentToken) this.token = ''
+        await this.start()
+        response = await send(this.token)
+      }
       const body =
         response.ok && binary ? await response.blob() : await response.json().catch(() => null)
-      if (response.status === 401) this.unauthorized()
-      if (response.status === 403 && body?.detail === 'Origin not allowed')
-        throw new ApiError(
-          403,
-          'origin_not_allowed',
-          'This dashboard address is not allowed by the local server. Open http://127.0.0.1:8000/, or restart the backend with this exact development address in ECHO_ALLOWED_ORIGINS (see frontend/README.md).',
-        )
-      if (!response.ok)
-        throw new ApiError(
-          response.status,
-          body?.error?.code ?? 'request_failed',
-          body?.error?.message ??
-            (response.status === 401
-              ? 'Session token was not accepted. Connect again.'
-              : 'The request could not be completed. Check the local server and try again.'),
-        )
+      if (!response.ok) throw requestError(response.status, body)
       return body as T
     } catch (error) {
       if (

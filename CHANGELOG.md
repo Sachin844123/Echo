@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — M7 OCR, image search and retrieval coverage
+
+- Read text in scanned PDF pages and PNG/JPEG images with local Tesseract.
+- Search imported images by appearance with local CLIP and by recognized text
+  or filename with document search. Add authenticated previews and reprocessing.
+- Show optional corpus-based spelling corrections and combine ranks per source
+  so a long document cannot occupy every slot in the final candidate lists.
+- Add migration `0003_images`, durable visual indexing and isolated migration,
+  OCR, visual retrieval and dashboard regression tests.
+- Verified with 288 backend tests, 14 browser and proxy tests, focused browser
+  reruns and a production build.
+
 ## Unreleased — M6 development upload fix
 
 - Detect a rejected browser origin at login and before streaming imports, with

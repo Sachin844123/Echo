@@ -5,6 +5,7 @@ from alembic import context
 from app.core.config import Settings
 from app.database.engine import create_sqlite_engine
 from app.database.models import Base
+from app.database.migrate import migration_connection
 
 
 def run(connection):
@@ -23,7 +24,7 @@ else:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     engine = create_sqlite_engine(settings.database_path)
     try:
-        with engine.begin() as connection:
+        with migration_connection(engine) as connection:
             run(connection)
     finally:
         engine.dispose()

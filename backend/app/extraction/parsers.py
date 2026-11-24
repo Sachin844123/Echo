@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from app.core.config import Settings
+from app.extraction.ocr import image_pixmap, image_text, ocr_status, page_text
 from app.ingestion.errors import ImportFailure
 from app.processing.text import clean_text
 from app.security.file_validation import text_encoding, validate_docx, validate_text
@@ -33,11 +34,13 @@ def text_units(path: Path, markdown: bool) -> Iterator[tuple[str, int | None, st
             line_start = line.endswith("\n")
 
 
-def pdf_units(path: Path, max_pages: int) -> Iterator[tuple[str, int | None, str | None]]:
+def pdf_units(path: Path, max_pages: int, settings: Settings | None = None,
+              methods: set[str] | None = None) -> Iterator[tuple[str, int | None, str | None]]:
     import pymupdf
 
     pymupdf.TOOLS.mupdf_display_errors(False)
     pymupdf.TOOLS.mupdf_display_warnings(False)
+    status = ocr_status(settings) if settings is not None else None
     try:
         with pymupdf.open(path) as document:
             if document.needs_pass:
@@ -45,7 +48,16 @@ def pdf_units(path: Path, max_pages: int) -> Iterator[tuple[str, int | None, str
             if document.page_count > max_pages:
                 raise ImportFailure("page_limit")
             for number in range(document.page_count):
-                text = document.load_page(number).get_text("text", sort=True)
+                page = document.load_page(number)
+                text = page.get_text("text", sort=True)
+                has_text = bool(text.strip())
+                has_images = bool(page.get_images()) if status and status["enabled"] else False
+                if status and status["available"] and (has_images or not has_text):
+                    text = page_text(page, settings, full=not bool(text.strip()))
+                    if methods is not None:
+                        methods.add("ocr")
+                elif status and status["error"] == "ocr_unavailable" and has_images and methods is not None:
+                    methods.add("ocr_unavailable")
                 for start in range(0, len(text), BLOCK_CHARS):
                     yield text[start:start + BLOCK_CHARS], number + 1, None
     except (pymupdf.FileDataError, pymupdf.EmptyFileError):
@@ -82,14 +94,28 @@ def docx_units(path: Path) -> Iterator[tuple[str, int | None, str | None]]:
     yield from walk(Document(path))
 
 
-def extract_to_spool(path: Path, source_type: str, output: Path, settings: Settings) -> str:
+def extract_to_spool(path: Path, source_type: str, output: Path, settings: Settings,
+                     title: str | None = None) -> str:
+    methods: set[str] = set()
     if source_type in {"txt", "markdown", "note"}:
         encoding = validate_text(path)
         units = text_units(path, source_type == "markdown")
         method = "manual_note" if source_type == "note" else f"{encoding}_text"
     elif source_type == "pdf":
-        units = pdf_units(path, settings.max_pdf_pages)
+        units = pdf_units(path, settings.max_pdf_pages, settings, methods)
         method = "pymupdf_text"
+    elif source_type == "image":
+        status = ocr_status(settings)
+        if status["available"]:
+            value = image_text(path, settings)
+            method = "tesseract_image" if value.strip() else "image_filename"
+        else:
+            image_pixmap(path, settings)  # Validate raster decoding before indexing metadata.
+            value = ""
+            method = "image_filename_" + status["error"]
+        # A real filename remains searchable even when the image contains no text.
+        # The extraction method explicitly distinguishes metadata from OCR output.
+        units = [(value if value.strip() else (title or ""), 1, None)]
     elif source_type == "docx":
         validate_docx(path, settings.max_docx_expanded_bytes)
         units = docx_units(path)
@@ -126,5 +152,11 @@ def extract_to_spool(path: Path, source_type: str, output: Path, settings: Setti
             buffer += text
         flush()
     if total == 0:
+        if source_type == "pdf" and "ocr_unavailable" in methods:
+            raise ImportFailure("ocr_unavailable")
         raise ImportFailure("no_extractable_text")
+    if "ocr" in methods:
+        return "pymupdf_tesseract"
+    if "ocr_unavailable" in methods:
+        return "pymupdf_text_ocr_unavailable"
     return method

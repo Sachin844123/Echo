@@ -240,9 +240,7 @@ def test_image_migration_preserves_full_graph_sequences_and_triggers(tmp_path):
     engine = create_sqlite_engine(tmp_path / 'TEST-DATA-m6.sqlite3')
     config = alembic_config()
     try:
-        with engine.begin() as connection:
-            config.attributes['connection'] = connection
-            command.upgrade(config, '0002_retrieval')
+        upgrade_database(engine)
         with Session(engine) as session:
             source_id, _, chunk_id = populated_graph(session)
             retired = source(content_hash='b' * 64)
@@ -251,6 +249,9 @@ def test_image_migration_preserves_full_graph_sequences_and_triggers(tmp_path):
             session.commit()
             session.delete(retired)
             session.commit()
+        with migration_connection(engine) as connection:
+            config.attributes['connection'] = connection
+            command.downgrade(config, '0002_retrieval')
         upgrade_database(engine)
         with engine.begin() as connection:
             assert connection.exec_driver_sql('PRAGMA foreign_keys').scalar() == 1

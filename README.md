@@ -142,41 +142,37 @@ offline machine, copy the complete prepared model directory from another machine
 Without the model, imports and keyword search work; semantic indexing/search
 report a visible model error. See [model setup and recovery](docs/search.md).
 
-### 2. Initialize and start
+### 2. Open ECHO
 
-Build the dashboard, then start ECHO. From the repository root:
+Double-click `Run-ECHO.bat` from the repository root. It builds the dashboard
+if needed, migrates the database and opens your browser to the workspace. Keep
+the launcher window open while using the app. Press Ctrl+C there to stop ECHO.
+After editing the frontend, run `.\Run-ECHO.bat --build` in PowerShell to
+rebuild the existing dashboard.
+
+To start a built dashboard manually, run from the repository root:
 
 ```powershell
-Set-Location frontend
-npm ci
-npm run build
-Set-Location ..
 Set-Location backend
-..\.venv\Scripts\python.exe -m app migrate
-$env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
-$env:ECHO_SESSION_TOKEN
-..\.venv\Scripts\python.exe -m app serve
+..\.venv\Scripts\python.exe -m app launch
 ```
 
-Open **`http://127.0.0.1:8000/`** and paste the displayed token to open the
-dashboard. This is an explicit local setup display, never application logging.
-The token stays in tab memory; reload or **Lock workspace** clears it. Only the
-theme preference persists in browser storage. Stop the server with **Ctrl+C**.
-Migrations are explicit and idempotent; startup rejects missing or outdated
-schemas. Stop the server and back up the data directory before future upgrades.
-
-The token is captured in the shell environment and is not saved to a file.
-For API-only operation, omit the token display line. Generate a fresh token for
-each server session. Restart with a new token to
-rotate it, then clear the shell copy after stopping:
-
-```powershell
-Remove-Item Env:ECHO_SESSION_TOKEN
-```
+ECHO opens at `http://127.0.0.1:8000/` by default. The dashboard establishes
+its local session automatically. Stop the server and back up your data
+directory before upgrading.
 
 ## API
 
-Every API request requires:
+The dashboard handles authentication automatically. For native clients,
+optionally configure a separate token in the server terminal before startup:
+
+```powershell
+# From backend
+$env:ECHO_SESSION_TOKEN = (& ..\.venv\Scripts\python.exe -m app token).Trim()
+..\.venv\Scripts\python.exe -m app launch
+```
+
+Native API requests use:
 
 ```http
 Authorization: Bearer <session-token>

@@ -32,4 +32,9 @@ def downgrade():
     op.drop_index("ix_indexing_jobs_stage_status", table_name="indexing_jobs")
     # SQLite 3.35+ supports DROP COLUMN without rebuilding parent tables/cascades.
     connection.exec_driver_sql("ALTER TABLE embedding_records DROP COLUMN content_hash")
-    connection.exec_driver_sql("ALTER TABLE indexing_jobs DROP COLUMN stage")
+    # Later parent-safe rebuilds may reflect the inline check as a table check.
+    checks = [c["name"] for c in sa.inspect(connection).get_check_constraints("indexing_jobs") if "stage IN" in c["sqltext"]]
+    with op.batch_alter_table("indexing_jobs", recreate="always", table_kwargs={"sqlite_autoincrement": True}) as batch:
+        for name in checks:
+            batch.drop_constraint(op.f(name), type_="check")
+        batch.drop_column("stage")

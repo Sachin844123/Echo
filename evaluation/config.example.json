@@ -1,4 +1,10 @@
 {
+  "retrieval_profile": "source_balanced",
+  "spelling_correction": true,
+  "candidate_scan_limit": 2000,
+  "ocr_enabled": false,
+  "ocr_languages": "eng",
+  "ocr_dpi": 200,
   "chunk_tokens": 350,
   "chunk_overlap": 60,
   "candidate_pool": 50,

@@ -13,11 +13,12 @@ from sqlalchemy import Engine, delete, func, select
 
 from app.core.config import REPO_ROOT, Settings
 from app.database.engine import create_session_factory
-from app.database.models import Chunk, Document, IndexingJob, Source
+from app.database.models import Chunk, Document, EmbeddingRecord, ImageEmbeddingRecord, IndexingJob, Source
 from app.ingestion.errors import ERRORS, ImportFailure
 from app.retrieval.errors import MESSAGES, RetrievalFailure
 from app.processing.chunking import iter_chunks, read_segments
 from app.security.file_validation import MIMES, detect_file, safe_filename
+from app.security.images import image_header
 from app.storage.files import FileStore
 from app.storage.instance_lock import InstanceLock
 
@@ -99,7 +100,8 @@ class IngestionService:
                 adopted = self.store.adopt(staged, source_type)
                 source = Source(
                     source_type=source_type, title=note_title or Path(name).stem,
-                    file_path=adopted, mime_type=MIMES[source_type], content_hash=digest,
+                    file_path=adopted, mime_type=(image_header(self.store.resolve(adopted), self.settings.max_image_pixels)[0]
+                                                if source_type == "image" else MIMES[source_type]), content_hash=digest,
                 )
                 session.add(source)
                 session.flush()
@@ -136,8 +138,19 @@ class IngestionService:
                 "created_at": job.created_at, "updated_at": job.updated_at,
                 "document_id": document, "chunk_count": chunk_count,
                 "ready_for_indexing": job.stage == "ingestion" and job.status == "succeeded",
-                "retryable": job.status == "failed" and job.attempts < self.settings.max_job_attempts,
+                "retryable": self._retryable(session, job),
             }
+
+    def _retryable(self, session, job: IndexingJob) -> bool:
+        if job.status != "failed" or job.attempts >= self.settings.max_job_attempts:
+            return False
+        if job.stage == "visual" and not self.settings.visual_indexing_enabled:
+            return False
+        newer = select(IndexingJob.id).where(
+            IndexingJob.source_id == job.source_id, IndexingJob.id > job.id,
+            IndexingJob.stage.in_([job.stage, "ingestion"]),
+        ).limit(1)
+        return session.scalar(newer) is None
 
     def jobs(self, limit: int, offset: int) -> dict:
         with self.mutation_lock, self.sessions() as session:
@@ -153,7 +166,7 @@ class IngestionService:
                 raise ImportFailure("not_found", 404)
             if session.get(Source, job.source_id).is_deleted:
                 raise ImportFailure("not_found", 404)
-            if job.status != "failed" or job.attempts >= self.settings.max_job_attempts:
+            if not self._retryable(session, job):
                 raise ImportFailure("retry_conflict", 409)
             pending = session.scalar(select(func.count()).select_from(IndexingJob).where(IndexingJob.status.in_(["pending", "running"])))
             if pending >= self.settings.max_pending_jobs:
@@ -162,6 +175,42 @@ class IngestionService:
             session.get(Source, job.source_id).processing_status = "pending"
         self.wake.set()
         return {"job_id": job_id, "status": "pending"}
+
+    def reprocess(self, source_id: int) -> dict:
+        """Explicitly re-extract a stored original, e.g. after enabling OCR."""
+        with self.mutation_lock, self.sessions.begin() as session:
+            source = session.get(Source, source_id)
+            if source is None or source.is_deleted:
+                raise RetrievalFailure("not_found", 404)
+            if session.scalar(select(IndexingJob.id).where(IndexingJob.source_id == source_id,
+                    IndexingJob.status.in_(["pending", "running"])).limit(1)):
+                raise ImportFailure("reprocess_conflict", 409)
+            pending = session.scalar(select(func.count()).select_from(IndexingJob).where(IndexingJob.status.in_(["pending", "running"])))
+            if pending >= self.settings.max_pending_jobs:
+                raise ImportFailure("queue_full", 429)
+            ids = set(session.scalars(select(Chunk.id).join(Document).where(Document.source_id == source_id)))
+            if self.indexer is not None:
+                try:
+                    self.indexer.vectors.remove(ids)
+                    if self.indexer.vectors.index is not None:
+                        self.indexer.vectors.save()
+                    self.indexer.visual.remove(source_id)
+                except Exception:
+                    self.indexer.vectors.load()
+                    self.indexer.visual.vectors.load()
+                    raise ImportFailure("storage_error", 503) from None
+            session.execute(delete(EmbeddingRecord).where(EmbeddingRecord.chunk_id.in_(ids)))
+            session.execute(delete(ImageEmbeddingRecord).where(ImageEmbeddingRecord.source_id == source_id))
+            document = session.scalar(select(Document).where(Document.source_id == source_id))
+            if document is not None:
+                document.extraction_status = "pending"
+            source.processing_status, source.indexed_at = "pending", None
+            job = IndexingJob(source_id=source_id, stage="ingestion")
+            session.add(job)
+            session.flush()
+            result = {"job_id": job.id, "source_id": source_id, "status": "pending"}
+        self.wake.set()
+        return result
 
     def _claim(self) -> tuple[int, int] | None:
         with self.mutation_lock, self.sessions.begin() as session:
@@ -189,6 +238,8 @@ class IngestionService:
                         stage = job.stage if job is not None else None
                     if stage == "indexing" and self.indexer is not None:
                         self.indexer.index_source(*claimed, self.stopping)
+                    elif stage == "visual" and self.indexer is not None:
+                        self.indexer.visual.index_source(*claimed, self.stopping)
                     elif stage == "ingestion":
                         self._execute(*claimed)
                     continue
@@ -204,9 +255,10 @@ class IngestionService:
         path = self.store.resolve(source.file_path)
         request = {
             "input": str(path), "output": str(spool), "source_type": source.source_type,
-            "content_hash": source.content_hash,
-            "limits": {name: getattr(self.settings, name) for name in (
+            "content_hash": source.content_hash, "title": source.title,
+            "limits": {name: self.settings.model_dump(mode="json")[name] for name in (
                 "max_upload_bytes", "max_extracted_chars", "max_pdf_pages", "max_docx_expanded_bytes",
+                "ocr_enabled", "ocr_languages", "ocr_data_dir", "ocr_dpi", "max_image_pixels",
             )},
         }
         environment = {key: value for key, value in os.environ.items() if not key.startswith("ECHO_")}
@@ -294,6 +346,8 @@ class IngestionService:
             job.status, job.error = "succeeded", None
             if self.indexer is not None:
                 session.add(IndexingJob(source_id=source_id, stage="indexing"))
+                if source.source_type == "image" and self.settings.visual_indexing_enabled:
+                    session.add(IndexingJob(source_id=source_id, stage="visual"))
 
     def _failed(self, job_id: int, source_id: int, code: str) -> None:
         with self.mutation_lock, self.sessions.begin() as session:

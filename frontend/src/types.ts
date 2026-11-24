@@ -1,5 +1,5 @@
-export type SourceType = 'pdf' | 'txt' | 'markdown' | 'docx' | 'note'
-export type Mode = 'keyword' | 'semantic' | 'hybrid' | 'hybrid_contextual'
+export type SourceType = 'pdf' | 'txt' | 'markdown' | 'docx' | 'note' | 'image'
+export type Mode = 'keyword' | 'semantic' | 'hybrid' | 'hybrid_contextual' | 'visual'
 export type View = 'Search' | 'Library' | 'Collections' | 'Sources' | 'Settings'
 export interface Source {
   id: number
@@ -31,6 +31,8 @@ export interface IndexStatus {
   sources_by_status: Record<string, number>
   deletions_pending: number
   indexing_incomplete: boolean
+  visual: { available: boolean; error: string | null; image_count: number }
+  spelling_correction: boolean
 }
 export interface Job {
   id: number
@@ -61,6 +63,12 @@ export interface SearchResponse {
   mode: Mode
   results: SearchHit[]
   indexing_incomplete: boolean
+  query_analysis: {
+    effective_query: string
+    corrections: { from: string; to: string }[]
+    spelling_enabled: boolean
+  }
+  candidate_scan_truncated: boolean
 }
 export interface Preview {
   document_id: number
@@ -68,12 +76,20 @@ export interface Preview {
   offset: number
   content_length: number
   has_more: boolean
+  extraction_method: string
 }
 export interface AppSettings {
   version: string
   search_history_enabled: false
   max_upload_bytes: number
   supported_types: SourceType[]
+  ocr: {
+    enabled: boolean
+    available: boolean
+    languages: string[]
+    dpi: number
+    error: string | null
+  }
   retrieval: {
     chunk_tokens: number
     chunk_overlap: number
@@ -82,6 +98,9 @@ export interface AppSettings {
     rrf_k: number
     embedding_model_name: string
     embedding_batch_size: number
+    retrieval_profile: string
+    spelling_correction: boolean
+    candidate_scan_limit: number
   }
   rerank_weights: Record<string, number>
 }
@@ -91,8 +110,14 @@ export const sourceNames: Record<SourceType, string> = {
   markdown: 'Markdown',
   docx: 'Word',
   note: 'Note',
+  image: 'Image',
 }
 export const modes: { value: Mode; label: string; description: string }[] = [
+  {
+    value: 'visual',
+    label: 'Images',
+    description: 'Finds imported images by their visual content using local CLIP.',
+  },
   {
     value: 'hybrid',
     label: 'Hybrid',

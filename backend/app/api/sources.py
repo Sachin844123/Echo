@@ -1,7 +1,7 @@
 """Local source references, bounded previews and collection membership."""
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -101,11 +101,51 @@ def document(request: Request, source_id: int, offset: int = Query(default=0, ge
     with service.lock, service.sessions() as session:
         require_source(session, source_id)
         row = session.execute(select(Document.id, Document.content_length, Document.extraction_status,
-            func.substr(Document.extracted_text, offset + 1, length)).where(Document.source_id == source_id)).first()
+            func.substr(Document.extracted_text, offset + 1, length), Document.extraction_method).where(Document.source_id == source_id)).first()
         if row is None:
             raise RetrievalFailure("not_found", 404)
         return {"document_id": row[0], "content_length": row[1], "extraction_status": row[2],
-                "text": row[3], "offset": offset, "has_more": offset + length < row[1]}
+                "text": row[3], "offset": offset, "has_more": offset + length < row[1], "extraction_method": row[4]}
+
+
+@router.post("/sources/{source_id}/reprocess", status_code=202)
+def reprocess(request: Request, source_id: int):
+    return request.app.state.ingestion.reprocess(source_id)
+
+
+@router.get("/sources/{source_id}/image")
+def image_preview(request: Request, source_id: int):
+    import hashlib
+    import io
+    from PIL import Image, ImageOps
+    from app.ingestion.errors import ImportFailure
+    from app.security.images import image_header
+
+    service = request.app.state.search
+    with service.lock, service.sessions() as session:
+        source = require_source(session, source_id)
+        if source.source_type != "image" or source.file_path is None:
+            raise RetrievalFailure("not_found", 404)
+        path = service.files.resolve(source.file_path)
+        try:
+            if path.stat().st_size > service.settings.max_upload_bytes:
+                raise ImportFailure("file_too_large", 413)
+            with path.open("rb") as stream:
+                if hashlib.file_digest(stream, "sha256").hexdigest() != source.content_hash:
+                    raise ImportFailure("input_changed")
+            image_header(path, service.settings.max_image_pixels)
+            with Image.open(path) as original:
+                if original.width * original.height > service.settings.max_image_pixels:
+                    raise ImportFailure("image_limit", 413)
+                with ImageOps.exif_transpose(original).convert("RGB") as image:
+                    image.thumbnail((1280, 1280))
+                    output = io.BytesIO()
+                    image.save(output, format="PNG")
+            return Response(output.getvalue(), media_type="image/png")
+        except ImportFailure:
+            raise
+        except Exception:
+            raise ImportFailure("invalid_image", 422) from None
 
 
 @router.get("/sources/{source_id}/chunks")

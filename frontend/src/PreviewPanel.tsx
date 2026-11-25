@@ -110,7 +110,7 @@ export function PreviewPanel({
                   setError('')
                   try {
                     await api.request(`/api/v1/sources/${sourceId}/reprocess`, { method: 'POST' })
-                    changed('Reprocessing queued. Follow its progress in Sources.')
+                    changed('Reprocessing queued. Follow its progress in Activity.')
                     setLocalRevision((r) => r + 1)
                   } catch (failure) {
                     setError(errorText(failure))
@@ -213,7 +213,7 @@ export function PreviewPanel({
               {source.data?.processing_status === 'pending' ||
               source.data?.processing_status === 'processing'
                 ? 'The document is still being prepared. Refresh after processing finishes.'
-                : 'Preview is unavailable. Check this document in Sources for processing errors.'}
+                : 'Preview is unavailable. Check Activity for this document’s processing errors.'}
               <button className="button small" onClick={() => setLocalRevision((r) => r + 1)}>
                 Refresh preview
               </button>

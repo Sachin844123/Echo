@@ -1,25 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Api, errorText, useGet } from './api'
 import { Confirm, Empty, ErrorBox, Icon, Loading, Pagination, StatusBadge } from './components'
 import { PreviewPanel } from './PreviewPanel'
+import { dateLabel, sourceNames } from './types'
 import type { AppSettings, IndexStatus, Job, Page } from './types'
+import type { SearchHistory } from './searchHistory'
 
-export function SourcesPage({
+export function ActivityPage({
   api,
   revision,
   status,
   changed,
+  openImport,
 }: {
   api: Api
   revision: number
   status?: IndexStatus
   changed: (message?: string) => void
+  openImport: () => void
 }) {
   const [offset, setOffset] = useState(0)
   const [tick, setTick] = useState(0)
   const [selected, setSelected] = useState<number>()
   const [error, setError] = useState('')
   const [retrying, setRetrying] = useState<number>()
+  const previewTrigger = useRef<HTMLButtonElement>(null)
   const jobs = useGet<Page<Job> & { worker_alive: boolean }>(
     api,
     `/api/v1/indexing-jobs?limit=30&offset=${offset}`,
@@ -34,31 +39,35 @@ export function SourcesPage({
     return () => clearInterval(timer)
   }, [jobs.data, offset])
   const counts = status?.sources_by_status ?? {}
+  const summary = [
+    { label: 'Fully indexed', icon: 'check', count: counts.indexed ?? 0 },
+    {
+      label: 'Processing',
+      icon: 'activity',
+      count: (counts.pending ?? 0) + (counts.processing ?? 0),
+    },
+    { label: 'Needs attention', icon: 'info', count: counts.failed ?? 0 },
+  ]
   return (
     <>
-      <div className="status-summary">
-        <div>
-          <span>Searchable</span>
-          <strong>{status ? (counts.indexed ?? 0) : '—'}</strong>
-        </div>
-        <div>
-          <span>Processing</span>
-          <strong>{status ? (counts.pending ?? 0) + (counts.processing ?? 0) : '—'}</strong>
-        </div>
-        <div>
-          <span>Need attention</span>
-          <strong>{status ? (counts.failed ?? 0) : '—'}</strong>
-        </div>
-        <div className="status-explanation">
-          <Icon name="info" />
-          <p>
-            Each import has a text extraction step and a search indexing step. Failed indexing can
-            still leave text available to keyword search.
-          </p>
-        </div>
-      </div>
+      <dl className="activity-summary" aria-label="Library status">
+        {summary.map((item) => (
+          <div key={item.label}>
+            <dt>
+              <span className="overview-icon">
+                <Icon name={item.icon} size={18} />
+              </span>
+              {item.label}
+            </dt>
+            <dd>{status ? item.count : '—'}</dd>
+          </div>
+        ))}
+      </dl>
       <div className="list-toolbar">
-        <h2>Import activity</h2>
+        <div>
+          <h2>Import activity</h2>
+          <p className="fine-print">Extraction and indexing jobs, newest first.</p>
+        </div>
         <button className="button small" onClick={() => setTick((t) => t + 1)}>
           <Icon name="refresh" size={16} />
           Refresh activity
@@ -86,17 +95,26 @@ export function SourcesPage({
                       <div>
                         <button
                           className="text-button document-title"
-                          onClick={() => setSelected(job.source_id)}
+                          onClick={(event) => {
+                            previewTrigger.current = event.currentTarget
+                            setSelected(job.source_id)
+                          }}
                         >
                           {job.title}
                         </button>
-                        <p>
-                          {job.stage === 'ingestion'
-                            ? 'Text extraction'
-                            : job.stage === 'visual'
-                              ? 'Visual indexing'
-                              : 'Text indexing'}
-                          <span aria-hidden="true"> · </span>Attempt {job.attempts}
+                        <p className="job-details">
+                          <span>{sourceNames[job.source_type]}</span>
+                          <span>
+                            {job.stage === 'ingestion'
+                              ? 'Text extraction'
+                              : job.stage === 'visual'
+                                ? 'Visual indexing'
+                                : 'Text indexing'}
+                          </span>
+                          <span>Attempt {job.attempts}</span>
+                          {job.updated_at ? (
+                            <time dateTime={job.updated_at}>{dateLabel(job.updated_at)}</time>
+                          ) : null}
                         </p>
                       </div>
                       <StatusBadge status={job.status} />
@@ -137,7 +155,15 @@ export function SourcesPage({
               <Pagination offset={offset} total={jobs.data.total} change={setOffset} />
             </>
           ) : (
-            <Empty icon="sources" title="Your next import starts here.">
+            <Empty
+              icon="activity"
+              title="Your next import starts here."
+              action={
+                <button className="button" onClick={openImport}>
+                  <Icon name="plus" size={16} /> Import documents
+                </button>
+              }
+            >
               Import a document or write a note. Its extraction and indexing progress will appear
               here.
             </Empty>
@@ -150,7 +176,10 @@ export function SourcesPage({
             sourceId={selected}
             revision={revision}
             changed={changed}
-            close={() => setSelected(undefined)}
+            close={() => {
+              setSelected(undefined)
+              requestAnimationFrame(() => previewTrigger.current?.focus())
+            }}
           />
         ) : null}
       </div>
@@ -165,6 +194,7 @@ export function SettingsPage({
   theme,
   toggleTheme,
   changed,
+  history,
   openStorage,
 }: {
   api: Api
@@ -173,6 +203,7 @@ export function SettingsPage({
   theme: string
   toggleTheme: () => void
   changed: (message?: string) => void
+  history: SearchHistory
   openStorage: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -212,14 +243,28 @@ export function SettingsPage({
         </div>
         <div className="setting-row">
           <div>
-            <strong>Search history</strong>
+            <strong>Recent searches</strong>
             <p>
-              Queries are not saved. ECHO searches your imports and eligible files from approved
-              folders.
+              Keep up to 12 searches in this browser. Turning this off clears the saved searches.
             </p>
           </div>
-          <span className="plain-badge">Off</span>
+          <div className="history-controls">
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={history.entries !== null}
+                onChange={(event) => history.setEnabled(event.target.checked)}
+              />
+              Remember recent searches
+            </label>
+            {history.entries?.length ? (
+              <button className="text-button" onClick={history.clear}>
+                Clear history
+              </button>
+            ) : null}
+          </div>
         </div>
+        {history.error ? <ErrorBox message={history.error} /> : null}
         <div className="setting-row">
           <div>
             <strong>Local file access</strong>
@@ -330,8 +375,8 @@ export function SettingsPage({
           <div>
             <strong>Delete all imported content</strong>
             <p>
-              Removes stored copies, text, chunks, search indexes, collections and jobs. Your
-              original files and prepared embedding model are kept.
+              Removes stored copies, text, indexes, collections, jobs, and this browser’s recent
+              searches. Your original files and prepared models are kept.
             </p>
           </div>
           <button className="button danger-outline" onClick={() => setDeleting(true)}>
@@ -347,12 +392,13 @@ export function SettingsPage({
           title="Delete all imported content?"
           label="Permanently delete library"
           phrase="DELETE ALL"
-          description="This removes the entire library and all collections, and turns off automatic folder indexing. This cannot be undone. Original source files and local models are kept."
+          description="This removes the entire library, collections, and recent searches in this browser. Automatic folder indexing turns off. Original files and local models are kept."
           close={() => setDeleting(false)}
           action={async () => {
             const result = await api.json<{ status: string }>('/api/v1/library', 'DELETE', {
               confirmation: 'DELETE ALL',
             })
+            history.clear()
             changed(
               result.status === 'deleted'
                 ? 'Library deleted. Your original files were kept.'

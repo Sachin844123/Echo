@@ -420,7 +420,7 @@ export function StoragePage({
       ) : null}
       {status.failed_jobs ? (
         <p role="status">
-          {status.failed_jobs} processing jobs failed. Open Sources for job details and retries.
+          {status.failed_jobs} processing jobs failed. Open Activity for job details and retries.
         </p>
       ) : null}
       {revoke ? (

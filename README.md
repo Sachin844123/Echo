@@ -10,8 +10,9 @@ no external AI calls, no telemetry.
 ECHO ships a local React dashboard, four text retrieval modes, visual image
 search, OCR and a reproducible evaluation harness with tuning-only weight sweeps.
 
-**On Windows:** after [setup](#quick-start), double-click
-[`Run-ECHO.bat`](Run-ECHO.bat). The workspace opens in your browser without sign-in.
+**On Windows:** double-click [`setup.bat`](setup.bat) for first-time setup and
+then use [`Run-ECHO.bat`](Run-ECHO.bat) to reopen ECHO. The workspace opens in
+your browser without sign-in. See [Quick start](#quick-start) for macOS and Linux.
 
 **ECHO cannot recover information that was never captured.**
 
@@ -158,8 +159,8 @@ No separate server or proxy is required in production mode.
 |---|---|---|
 | Python | **3.11+** | SQLite FTS5 support required |
 | Node.js with npm | **Node 22.12+** | Only needed to build the dashboard |
-| Git | Any recent | For cloning the repository |
-| OS | Windows (primary) | PowerShell commands shown below |
+| Git | Any recent | Optional if you download the ZIP |
+| OS | Windows (primary) | Setup scripts for Windows, macOS, and Linux |
 
 > [!NOTE]
 > The verified environment is **Windows, Python 3.12.6 and SQLite 3.45.3**.
@@ -167,18 +168,30 @@ No separate server or proxy is required in production mode.
 
 ---
 
-### 1. Clone and install dependencies
+### 1. Get ECHO and run setup
 
-```powershell
-git clone https://github.com/Sachin844123/Echo.git
-Set-Location Echo
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt -c backend\requirements-lock.txt
-```
+Clone the repository or download the GitHub ZIP and extract it to a writable
+folder. Install Python 3.11+ (3.12 recommended) and Node.js 22.12+ with npm
+first, then use the setup script for your operating system.
 
-The lock file records the full resolved environment including transitive
-versions. It is not a hash-verified supply-chain lock. Activating the virtual
-environment is optional — commands below use the explicit interpreter path.
+| Platform | First-run setup |
+| --- | --- |
+| Windows | Double-click [`setup.bat`](setup.bat) or run `.\setup.bat` from PowerShell. |
+| macOS and Linux | Open a terminal in the extracted repository and run `bash setup.sh`. |
+
+Setup creates `.venv`, installs the pinned Python and npm dependencies,
+builds the dashboard, and prepares MiniLM, English OCR, and CLIP by default.
+It then initializes or migrates the database and opens ECHO in your browser.
+Allow internet access and several GB of free disk space for the first setup.
+ECHO runs locally after setup. Reruns reuse and verify prepared model files.
+Close the ECHO server before rerunning setup.
+
+Add `--no-launch` to prepare the database and exit. Add `--skip-models`
+to skip model downloads if you only need keyword search. Combine the options,
+for example `.\setup.bat --no-launch --skip-models` in PowerShell or
+`bash setup.sh --no-launch --skip-models` in a shell. If Linux reports that
+`ensurepip` is missing, enable venv support for your Python installation
+(for example, install `python3-venv` on Debian or Ubuntu) and rerun setup.
 
 **VS Code and Antigravity users:** open the `Echo` repository folder. Workspace
 settings point to `.venv\Scripts\python.exe` on Windows. `pyproject.toml`
@@ -192,13 +205,20 @@ and [Pyright configuration](https://github.com/microsoft/pyright/blob/main/docs/
 
 ---
 
-### 2. Launch the dashboard
+### 2. Reopen the dashboard
 
 Double-click [`Run-ECHO.bat`](Run-ECHO.bat) in File Explorer, or run
 `.\Run-ECHO.bat` from the repository root in PowerShell. On the first launch,
 the script builds the dashboard if needed, then initializes or migrates the
 database and opens [ECHO on loopback](http://127.0.0.1:8000/). The launcher
 prints the address if you use a different port.
+
+On macOS or Linux, run the following from the repository root after setup:
+
+```sh
+cd backend
+../.venv/bin/python -m app launch
+```
 
 The workspace opens directly. On the first visit, choose a storage access level
 or deny access to use manual imports only. Keep the launcher window open while using ECHO
@@ -579,6 +599,8 @@ separate vector database servers.
 ## Repository structure
 
 ```text
+setup.bat             First-run setup on Windows
+setup.sh              First-run setup on macOS and Linux
 Run-ECHO.bat          Windows launcher for the local dashboard
 backend/
   app/

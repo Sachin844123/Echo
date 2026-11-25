@@ -1,22 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Ref } from 'react'
 import { Api, errorText, useCollections } from './api'
 import { Empty, ErrorBox, HighlightedText, Icon, Loading } from './components'
 import { PreviewPanel } from './PreviewPanel'
+import { LibraryActivity, RecentSearches } from './SearchOverview'
+import type { SearchHistory } from './searchHistory'
 import { dateLabel, modes, sourceNames } from './types'
 import type { IndexStatus, Mode, SearchHit, SearchResponse } from './types'
 
 export function SearchPage({
+  headingRef,
   api,
   revision,
   status,
+  history,
   changed,
   openImport,
+  openActivity,
 }: {
+  headingRef: Ref<HTMLHeadingElement>
   api: Api
   revision: number
   status?: IndexStatus
+  history: SearchHistory
   changed: (message?: string) => void
   openImport: () => void
+  openActivity: () => void
 }) {
   const [query, setQuery] = useState('')
   const [mode, setMode] = useState<Mode>('hybrid')
@@ -27,6 +36,8 @@ export function SearchPage({
   const [contextType, setContextType] = useState('')
   const [contextCollection, setContextCollection] = useState('')
   const [correctSpelling, setCorrectSpelling] = useState<boolean>()
+  const [filtersOpen, setFiltersOpen] = useState(() => !matchMedia('(max-width: 760px)').matches)
+  const [recentOpen, setRecentOpen] = useState(false)
   const [response, setResponse] = useState<SearchResponse>()
   const [submitted, setSubmitted] = useState('')
   const [selected, setSelected] = useState<SearchHit>()
@@ -34,6 +45,8 @@ export function SearchPage({
   const [error, setError] = useState('')
   const active = useRef<AbortController | null>(null)
   const previewTrigger = useRef<HTMLButtonElement>(null)
+  const queryInput = useRef<HTMLInputElement>(null)
+  const activeFilters = [mode === 'visual' ? '' : type, collection, from, to].filter(Boolean).length
   const effectiveQuery = response?.query_analysis?.effective_query ?? submitted
   const highlightWords = useMemo(
     () => new Set(effectiveQuery.toLocaleLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []),
@@ -53,6 +66,7 @@ export function SearchPage({
   }, [revision])
   const modified = () => {
     active.current?.abort()
+    setRecentOpen(false)
     setBusy(false)
     setResponse(undefined)
     setSubmitted('')
@@ -63,6 +77,7 @@ export function SearchPage({
     active.current?.abort()
     const controller = new AbortController()
     active.current = controller
+    setRecentOpen(false)
     setError('')
     setSelected(undefined)
     setResponse(undefined)
@@ -93,13 +108,27 @@ export function SearchPage({
         },
         controller.signal,
       )
-      if (!controller.signal.aborted) setResponse(result)
+      if (!controller.signal.aborted) {
+        setResponse(result)
+        history.remember(query.trim(), mode)
+      }
     } catch (error) {
       if (!controller.signal.aborted) setError(errorText(error))
     } finally {
       if (!controller.signal.aborted) setBusy(false)
     }
   }
+  const recentSearches = (
+    <RecentSearches
+      history={history}
+      reuse={(entry) => {
+        modified()
+        setQuery(entry.query)
+        setMode(entry.mode)
+        queryInput.current?.focus()
+      }}
+    />
+  )
   return (
     <>
       <form
@@ -109,26 +138,55 @@ export function SearchPage({
           void search()
         }}
       >
-        <div className="search-input-row">
-          <Icon name="search" size={24} />
-          <label className="sr-only" htmlFor="memory-query">
-            What do you remember?
-          </label>
-          <input
-            id="memory-query"
-            placeholder="A phrase, an idea, a detail…"
-            value={query}
-            maxLength={2000}
-            onChange={(e) => {
-              modified()
-              setQuery(e.target.value)
-            }}
-            autoComplete="off"
-          />
-          <button className="button primary" disabled={busy || !query.trim()}>
-            {busy ? 'Searching…' : 'Search'}
-            <Icon name="arrow" size={18} />
-          </button>
+        <div className="search-composer">
+          <header className="search-heading">
+            <div>
+              <h1 ref={headingRef} tabIndex={-1}>
+                Find it again.
+              </h1>
+              <p>Search your imports and files in approved folders.</p>
+            </div>
+            <span className="shortcut">
+              <kbd>Ctrl</kbd>
+              <kbd>K</kbd> to search
+            </span>
+          </header>
+          <div className="search-input-row">
+            <Icon name="search" size={24} />
+            <label className="sr-only" htmlFor="memory-query">
+              What do you remember?
+            </label>
+            <input
+              ref={queryInput}
+              id="memory-query"
+              placeholder="A phrase, an idea, a detail…"
+              value={query}
+              maxLength={2000}
+              onChange={(e) => {
+                modified()
+                setQuery(e.target.value)
+              }}
+              autoComplete="off"
+            />
+            {query ? (
+              <button
+                type="button"
+                className="icon-button clear-query"
+                aria-label="Clear search"
+                onClick={() => {
+                  modified()
+                  setQuery('')
+                  queryInput.current?.focus()
+                }}
+              >
+                <Icon name="close" size={18} />
+              </button>
+            ) : null}
+            <button className="button primary" disabled={busy || !query.trim()}>
+              {busy ? 'Searching…' : 'Search'}
+              <Icon name="arrow" size={18} />
+            </button>
+          </div>
         </div>
         <div className="search-options">
           <div className="mode-tabs" role="group" aria-label="Search method">
@@ -147,12 +205,32 @@ export function SearchPage({
               </button>
             ))}
           </div>
-          <span className="search-scope">
-            <Icon name="library" size={14} />
-            Your local library
-          </span>
+          <div className="search-tools">
+            <button
+              type="button"
+              className="button small"
+              aria-expanded={filtersOpen}
+              aria-controls="search-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              <Icon name="settings" size={16} />
+              Filters{activeFilters ? ` (${activeFilters})` : ''}
+            </button>
+            {response ? (
+              <button
+                type="button"
+                className="button small"
+                aria-expanded={recentOpen}
+                aria-controls="search-recent"
+                onClick={() => setRecentOpen((open) => !open)}
+              >
+                <Icon name="history" size={16} />
+                Recent
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="filters">
+        <div className="filters" id="search-filters" hidden={!filtersOpen}>
           <label>
             File type
             <select
@@ -274,6 +352,11 @@ export function SearchPage({
           </div>
         ) : null}
       </form>
+      {response ? (
+        <div id="search-recent" className="search-recent" hidden={!recentOpen}>
+          {recentOpen ? recentSearches : null}
+        </div>
+      ) : null}
       {collections.error ? <ErrorBox message={collections.error} /> : null}
       {mode !== 'visual' ? (
         <label className="checkbox-row search-spelling">
@@ -315,139 +398,114 @@ export function SearchPage({
         </div>
       ) : null}
       {error ? <ErrorBox message={error} retry={() => void search()} /> : null}
-      <div className={`document-workspace ${selected ? 'has-preview' : ''}`}>
-        <section className="results" aria-label="Search results" aria-busy={busy}>
-          {busy ? (
-            <Loading label="Searching your library" />
-          ) : response ? (
-            <>
-              <div className="section-bar" role="status">
-                <h2>
-                  {response.results.length} result{response.results.length === 1 ? '' : 's'}
-                </h2>
-                <span>
-                  {mode === 'visual'
-                    ? 'Imported images matched by appearance'
-                    : 'Best passage from each document'}
-                </span>
-              </div>
-              {response.query_analysis?.corrections.length ? (
-                <div className="info-banner">
-                  Searching for: {response.query_analysis.effective_query}. Turn off spelling
-                  correction to search your exact wording.
+      {busy || response || selected ? (
+        <div className={`document-workspace ${selected ? 'has-preview' : ''}`}>
+          <section className="results" aria-label="Search results" aria-busy={busy}>
+            {busy ? (
+              <Loading label="Searching your library" />
+            ) : response ? (
+              <>
+                <div className="section-bar" role="status">
+                  <h2>
+                    {response.results.length} result{response.results.length === 1 ? '' : 's'}
+                  </h2>
+                  <span>
+                    {mode === 'visual'
+                      ? 'Imported images matched by appearance'
+                      : 'Best passage from each document'}
+                  </span>
                 </div>
-              ) : null}
-              {response.candidate_scan_truncated ? (
-                <div className="info-banner">
-                  The candidate scan limit was reached. Try a more specific query or a collection
-                  filter.
-                </div>
-              ) : null}
-              {response.indexing_incomplete ? (
-                <div className="info-banner">
-                  Some documents are still processing or need attention. Results may be incomplete.
-                </div>
-              ) : null}
-              {response.results.length ? (
-                <div className="result-list">
-                  {response.results.map((hit) => (
-                    <button
-                      className={`result-row ${selected?.source_id === hit.source_id ? 'selected' : ''}`}
-                      key={hit.source_id}
-                      onClick={(event) => {
-                        previewTrigger.current = event.currentTarget
-                        setSelected(hit)
-                      }}
-                      aria-label={`Preview ${hit.title}`}
-                      aria-describedby={`result-meta-${hit.source_id}`}
-                      aria-pressed={selected?.source_id === hit.source_id}
-                    >
-                      <span className={`file-icon type-${hit.source_type}`}>
-                        <Icon name={hit.source_type === 'image' ? 'image' : 'sources'} size={18} />
-                      </span>
-                      <span className="result-body">
-                        <strong>{hit.title}</strong>
-                        <span className="row-meta" id={`result-meta-${hit.source_id}`}>
-                          {sourceNames[hit.source_type]}
-                          <span aria-hidden="true">·</span>
-                          {dateLabel(hit.captured_at)}
-                          {mode !== 'visual' && hit.page_number ? (
-                            <span>Page {hit.page_number}</span>
-                          ) : null}
+                {response.query_analysis?.corrections.length ? (
+                  <div className="info-banner">
+                    Searching for: {response.query_analysis.effective_query}. Turn off spelling
+                    correction to search your exact wording.
+                  </div>
+                ) : null}
+                {response.candidate_scan_truncated ? (
+                  <div className="info-banner">
+                    The candidate scan limit was reached. Try a more specific query or a collection
+                    filter.
+                  </div>
+                ) : null}
+                {response.indexing_incomplete ? (
+                  <div className="info-banner">
+                    Some documents are still processing or need attention. Results may be
+                    incomplete.
+                  </div>
+                ) : null}
+                {response.results.length ? (
+                  <div className="result-list">
+                    {response.results.map((hit) => (
+                      <button
+                        className={`result-row ${selected?.source_id === hit.source_id ? 'selected' : ''}`}
+                        key={hit.source_id}
+                        onClick={(event) => {
+                          previewTrigger.current = event.currentTarget
+                          setSelected(hit)
+                        }}
+                        aria-label={`Preview ${hit.title}`}
+                        aria-describedby={`result-meta-${hit.source_id}`}
+                        aria-pressed={selected?.source_id === hit.source_id}
+                      >
+                        <span className={`file-icon type-${hit.source_type}`}>
+                          <Icon
+                            name={hit.source_type === 'image' ? 'image' : 'sources'}
+                            size={18}
+                          />
                         </span>
-                        {mode !== 'visual' ? (
-                          <span className="excerpt">
-                            <HighlightedText text={hit.excerpt} words={highlightWords} />
+                        <span className="result-body">
+                          <strong>{hit.title}</strong>
+                          <span className="row-meta" id={`result-meta-${hit.source_id}`}>
+                            {sourceNames[hit.source_type]}
+                            <span aria-hidden="true">·</span>
+                            {dateLabel(hit.captured_at)}
+                            {mode !== 'visual' && hit.page_number ? (
+                              <span>Page {hit.page_number}</span>
+                            ) : null}
                           </span>
-                        ) : null}
-                        {hit.heading ? <span className="row-heading">{hit.heading}</span> : null}
-                      </span>
-                      <Icon name="arrow" size={17} />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <Empty icon="search" title="No matching documents">
-                  Try fewer words, a related idea, or remove a filter. ECHO only searches content
-                  already in your library.
-                </Empty>
-              )}
-            </>
-          ) : (
-            <div className="search-rest">
-              <div className="section-bar">
-                <h2>Your memory is the starting point.</h2>
-                <span>No search history saved</span>
-              </div>
-              <div className="search-guidance">
-                <div>
-                  <Icon name="search" size={23} />
-                  <h3>A few words</h3>
-                  <p>Use a phrase, a name, or a detail that stayed with you.</p>
-                </div>
-                <div>
-                  <Icon name="sources" size={23} />
-                  <h3>The idea behind it</h3>
-                  <p>Describe the subject in your own words with Hybrid or Meaning.</p>
-                </div>
-                <div>
-                  <Icon name="folder" size={23} />
-                  <h3>A place to look</h3>
-                  <p>Narrow the search by file type, collection, or capture date.</p>
-                </div>
-              </div>
-              <div className="library-invitation">
-                <span className="empty-icon">
-                  <Icon name="library" size={26} />
-                </span>
-                <div>
-                  <h3>Build a library worth returning to.</h3>
-                  <p>Import your papers, documents and notes to make them searchable.</p>
-                </div>
-                <button className="button" onClick={openImport}>
-                  Import documents
-                  <Icon name="plus" size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-        {selected ? (
-          <PreviewPanel
-            key={`${selected.source_id}-${selected.chunk_id}`}
-            api={api}
-            sourceId={selected.source_id}
-            hit={mode === 'visual' ? undefined : selected}
-            highlightWords={highlightWords}
-            revision={revision}
-            changed={changed}
-            close={() => {
-              setSelected(undefined)
-              requestAnimationFrame(() => previewTrigger.current?.focus())
-            }}
-          />
-        ) : null}
-      </div>
+                          {mode !== 'visual' ? (
+                            <span className="excerpt">
+                              <HighlightedText text={hit.excerpt} words={highlightWords} />
+                            </span>
+                          ) : null}
+                          {hit.heading ? <span className="row-heading">{hit.heading}</span> : null}
+                        </span>
+                        <Icon name="arrow" size={17} />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty icon="search" title="No matching documents">
+                    Try fewer words, a related idea, or remove a filter. ECHO only searches content
+                    already in your library.
+                  </Empty>
+                )}
+              </>
+            ) : null}
+          </section>
+          {selected ? (
+            <PreviewPanel
+              key={`${selected.source_id}-${selected.chunk_id}`}
+              api={api}
+              sourceId={selected.source_id}
+              hit={mode === 'visual' ? undefined : selected}
+              highlightWords={highlightWords}
+              revision={revision}
+              changed={changed}
+              close={() => {
+                setSelected(undefined)
+                requestAnimationFrame(() => previewTrigger.current?.focus())
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {!busy && !response && !selected ? (
+        <div className="search-overview">
+          {recentSearches}
+          <LibraryActivity status={status} openActivity={openActivity} openImport={openImport} />
+        </div>
+      ) : null}
     </>
   )
 }

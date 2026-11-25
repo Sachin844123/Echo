@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — source checkout setup
+
+- Add first-run scripts for Windows, macOS, and Linux. Install the project
+  dependencies, build the dashboard, prepare local models, initialize the
+  database, and open ECHO from the same command.
+- Verified on a clean Windows copy, including all three model downloads
+  and the authenticated loopback launch. Checked the shell entry point in
+  Git Bash and Ubuntu WSL.
+
+## Unreleased — dashboard refinement
+
+- Refine both themes across the existing workspace with consistent controls,
+  surfaces, navigation states, and feedback.
+- Improve search result and preview readability, narrow layouts, and keyboard
+  focus. Apply the saved theme before the workspace paints.
+- Verified with 303 backend tests, 15 browser and proxy tests, a production
+  build, and visual and accessibility checks in both themes at both widths.
+
 ## Unreleased — opt-in local storage indexing
 
 - Add storage consent, four access levels, and persistent folder and type filters.

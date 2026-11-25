@@ -1,5 +1,18 @@
 # Decisions
 
+## Search workspace and Activity
+
+- Put the search composer first, then surface recent searches and indexing
+  activity using the existing local API. Keep the existing retrieval and
+  permission workflows.
+- Keep recent searches off by default. Opt-in browser storage retains at most
+  12 completed searches with their modes and timestamps. Reuse fills the
+  query and mode so the user chooses when to submit. Current filters stay visible.
+- Reuse the existing Sources job view as Activity. Show real source counts and
+  job timestamps without adding a second activity store.
+- Apply theme colors together. Animate button presses with transforms so
+  labels stay readable while switching themes.
+
 ## Source checkout setup — 2026-11-25
 
 - Use the same Python setup driver from both shell entry points and the

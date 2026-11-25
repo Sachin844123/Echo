@@ -14,6 +14,14 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   folder: <path d="M3 7V5h6l2 3h10v12H3z" />,
+  storage: <path d="M3 14 6 5h12l3 9v5H3zm0 0h18m-5 2.5h1m-4 0h.1" />,
+  image: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="9" r="1.5" />
+      <path d="m4 17 5-4 3 2 4-5 5 6" />
+    </>
+  ),
   sources: (
     <>
       <path d="M5 3h10l4 4v14H5zM14 3v5h5M8 12h8M8 16h6" />
@@ -135,10 +143,17 @@ export function Empty({
 export function Loading({ label = 'Loading documents' }: { label?: string }) {
   return (
     <div className="loading" role="status">
-      <span className="loading-dot" />
+      <span className="loading-dot" aria-hidden="true" />
       {label}…
     </div>
   )
+}
+export function HighlightedText({ text, words }: { text: string; words: ReadonlySet<string> }) {
+  return text
+    .split(/([\p{L}\p{N}_]+)/gu)
+    .map((piece, index) =>
+      words.has(piece.toLocaleLowerCase()) ? <mark key={index}>{piece}</mark> : piece,
+    )
 }
 export function StatusBadge({ status }: { status: string }) {
   return (

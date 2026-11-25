@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Api, errorText, useCollections, useGet } from './api'
-import { Confirm, ErrorBox, Icon, Loading, StatusBadge } from './components'
+import { Confirm, ErrorBox, HighlightedText, Icon, Loading, StatusBadge } from './components'
 import { dateLabel, sourceNames } from './types'
 import type { Preview, SearchHit, Source } from './types'
 import { ImagePreview } from './ImagePreview'
@@ -9,6 +9,7 @@ export function PreviewPanel({
   api,
   sourceId,
   hit,
+  highlightWords,
   revision,
   changed,
   close,
@@ -16,6 +17,7 @@ export function PreviewPanel({
   api: Api
   sourceId: number
   hit?: SearchHit
+  highlightWords?: ReadonlySet<string>
   revision: number
   changed: (message?: string) => void
   close: () => void
@@ -61,8 +63,8 @@ export function PreviewPanel({
   }
   function highlighted() {
     if (!preview.data) return null
-    const points = Array.from(preview.data.text)
     if (!hit) return preview.data.text
+    const points = Array.from(preview.data.text)
     const start = Math.max(0, hit.start_offset - offset),
       end = Math.min(points.length, hit.end_offset - offset)
     if (start >= end) return preview.data.text
@@ -175,7 +177,13 @@ export function PreviewPanel({
         {hit ? (
           <section className="matched-excerpt">
             <h3>Matched passage {hit.page_number ? <span>Page {hit.page_number}</span> : null}</h3>
-            <p>{hit.excerpt}</p>
+            <p>
+              {highlightWords ? (
+                <HighlightedText text={hit.excerpt} words={highlightWords} />
+              ) : (
+                hit.excerpt
+              )}
+            </p>
             {hit.heading ? <small>{hit.heading}</small> : null}
           </section>
         ) : null}

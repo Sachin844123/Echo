@@ -6,6 +6,8 @@ complete and tested. The authorized local storage indexing milestone and the
 dashboard UI refinement are complete and tested. React Bits is the separate
 requested dashboard update.
 Source checkout setup is complete and verified end to end on Windows.
+The Search workspace, opt-in recent searches, and Activity are complete and
+verified in the browser.
 Webpage capture and packaging remain unstarted.
 Update this status after each milestone.
 Run its tests, fix failures, update docs/PROGRESS.md,

@@ -14,6 +14,8 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   folder: <path d="M3 7V5h6l2 3h10v12H3z" />,
+  activity: <path d="M3 12h4l3-7 4 14 3-7h4" />,
+  history: <path d="M3 10a9 9 0 1 1 2 8M3 5v5h5m4-3v5l3 2" />,
   storage: <path d="M3 14 6 5h12l3 9v5H3zm0 0h18m-5 2.5h1m-4 0h.1" />,
   image: (
     <>

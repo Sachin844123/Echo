@@ -7,8 +7,26 @@
 **Opt-in local storage access and indexing are complete and tested.**
 **Dashboard UI refinement is complete and tested.**
 **Source checkout setup is complete and verified end to end on Windows.**
+**The Search workspace, recent searches, and Activity are complete and tested.**
 Webpage capture and packaging remain unstarted. React Bits is queued as a
 separate dashboard update after M7.
+
+## Search workspace and Activity
+
+- Rebuilt the Search composer and landing layout around the query, filters,
+  recent searches, and live library counts. Filters start collapsed on
+  narrow displays.
+- Added browser-local, opt-in history for up to 12 completed searches.
+  Reuse restores the query and mode. Search and Settings provide controls
+  for deleting individual entries, clearing history, and disabling it.
+- Reworked Sources as Activity with library counts and timestamped jobs.
+  It uses the existing extraction and indexing API, previews, and retries.
+- `npm run format:check` and `npm run build` passed. `npm test` returned
+  16 passing regressions and skipped the opt-in screenshot test by default.
+  The screenshot test passed separately with zero axe violations and no
+  horizontal overflow across all 24 page, theme, and viewport combinations.
+- Captures with labelled test data and a side-by-side Search comparison are
+  saved under the ignored `.local/ui-workspace/` directory.
 
 ## Source checkout setup
 

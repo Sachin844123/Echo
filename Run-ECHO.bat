@@ -4,7 +4,7 @@ pushd "%~dp0"
 if errorlevel 1 goto unavailable
 
 if not exist ".venv\Scripts\python.exe" (
-    echo ECHO's Python environment is missing. Follow the Quick start in README.md.
+    echo ECHO's Python environment is missing. Run setup.bat first.
     goto failed
 )
 

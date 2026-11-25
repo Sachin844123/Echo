@@ -68,7 +68,7 @@ test('capture the workspace in both themes and viewport sizes', async ({ page })
         ['Search', 'Find it again.'],
         ['Library', 'TEST DATA Solar research'],
         ['Collections', 'TEST DATA Field notes'],
-        ['Sources', 'TEST DATA Solar research'],
+        ['Activity', 'TEST DATA Solar research'],
         ['Storage', 'Deny Access'],
         ['Settings', 'Local search'],
       ]) {
@@ -105,6 +105,18 @@ test('capture the workspace in both themes and viewport sizes', async ({ page })
           await expect(page.getByRole('heading', { name: 'Matched passage' })).toBeVisible()
           await page.evaluate(() => window.scrollTo(0, 0))
           await save(`${theme}-${size}-preview`)
+          if (theme === 'dark' && size === 'desktop') {
+            await page.getByRole('button', { name: 'Recent', exact: true }).click()
+            await page.getByRole('button', { name: 'Enable recent searches' }).click()
+            await page
+              .getByRole('main')
+              .getByRole('button', { name: 'Search', exact: true })
+              .click()
+            await expect(page.getByRole('heading', { name: '1 result' })).toBeVisible()
+            await page.getByRole('button', { name: 'Clear search' }).click()
+            await expect(page.getByRole('button', { name: /^solar batteries/ })).toBeVisible()
+            await save('dark-desktop-recent-searches')
+          }
         }
       }
     }

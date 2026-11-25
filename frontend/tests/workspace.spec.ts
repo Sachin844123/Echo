@@ -170,6 +170,10 @@ test('import, duplicate detection, keyword search, matched preview, rename and s
   await expect(page.getByRole('button', { name: 'Preview TEST DATA Solar research' })).toBeVisible()
   await page.getByRole('button', { name: 'Preview TEST DATA Solar research' }).click()
   await expect(page.getByRole('heading', { name: 'Matched passage' })).toBeVisible()
+  await expect(page.locator('.matched-excerpt mark')).toHaveText(['Solar', 'batteries'])
+  await page.getByRole('button', { name: 'Close preview' }).click()
+  await expect(page.getByRole('button', { name: 'Preview TEST DATA Solar research' })).toBeFocused()
+  await page.keyboard.press('Enter')
   await expect(page.locator('.reading-text')).toContainText('<script>window.evil=1</script>')
   expect(await page.evaluate(() => 'evil' in window)).toBe(false)
   await page.screenshot({ path: 'test-results/document-preview.png', fullPage: true })
@@ -329,7 +333,9 @@ test('keyboard navigation, modal focus, themes, responsive layout and accessibil
 }) => {
   const violations = async () =>
     (
-      await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+        .analyze()
     ).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))
   await openWorkspace(page)
   await page.keyboard.press('Control+k')
@@ -349,11 +355,39 @@ test('keyboard navigation, modal focus, themes, responsive layout and accessibil
   await page.screenshot({ path: 'test-results/dashboard-dark.png', fullPage: true })
   await page.setViewportSize({ width: 375, height: 812 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.getByRole('button', { name: 'Toggle navigation' }).click()
+  const toggle = page.getByRole('button', { name: 'Toggle navigation' })
+  await toggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('navigation').getByRole('button', { name: 'Search' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(toggle).toBeFocused()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await page.keyboard.press('Enter')
   await navigate(page, 'Library')
   await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible()
   expect(await violations()).toEqual([])
   await page.screenshot({ path: 'test-results/dashboard-mobile.png', fullPage: true })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 667, height: 375 })
+  const openImport = page.getByRole('button', { name: 'Import', exact: true })
+  await expect(openImport).toHaveCSS('transition-duration', '0s')
+  await openImport.click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveCSS('animation-name', 'none')
+  expect((await dialog.boundingBox())!.height).toBeLessThan(375)
+  expect(await violations()).toEqual([])
+})
+
+test('a stored theme is applied before React starts', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('echo.theme.v1', 'dark'))
+  await page.route('**/assets/index-*.js', (route) => route.abort())
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  expect(await page.locator('html').evaluate((root) => getComputedStyle(root).colorScheme)).toBe(
+    'dark',
+  )
+  await expect(page.locator('#root')).toBeEmpty()
 })
 
 test('queries are not persisted and stale search responses cannot overwrite newer input', async ({

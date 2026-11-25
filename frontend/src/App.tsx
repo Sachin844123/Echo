@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Api, errorText, useGet } from './api'
 import { Brand, ErrorBox, Icon, Loading } from './components'
 import { SearchPage } from './SearchPage'
@@ -14,16 +14,12 @@ const nav: { view: View; icon: string }[] = [
   { view: 'Library', icon: 'library' },
   { view: 'Collections', icon: 'folder' },
   { view: 'Sources', icon: 'sources' },
-  { view: 'Storage', icon: 'folder' },
+  { view: 'Storage', icon: 'storage' },
   { view: 'Settings', icon: 'settings' },
 ]
 function initialTheme(): 'light' | 'dark' {
-  try {
-    const value = localStorage.getItem('echo.theme.v1')
-    if (value === 'light' || value === 'dark') return value
-  } catch {
-    /* Storage is optional. */
-  }
+  const value = document.documentElement.dataset.theme
+  if (value === 'light' || value === 'dark') return value
   return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 export function App() {
@@ -54,7 +50,7 @@ export function App() {
       client.dispose()
     }
   }, [attempt])
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
     try {
       localStorage.setItem('echo.theme.v1', theme)
@@ -103,6 +99,8 @@ function Workspace({
   const [storageStatus, setStorageStatus] = useState(storage)
   const [onboarding, setOnboarding] = useState(storage.mode === null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const navigation = useRef<HTMLElement>(null)
+  const menuButton = useRef<HTMLButtonElement>(null)
   const settings = useGet<AppSettings>(api, '/api/v1/settings', revision)
   const refresh = useCallback(() => setRevision((r) => r + 1), [])
   const changed = useCallback(
@@ -153,6 +151,9 @@ function Workspace({
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [])
+  useLayoutEffect(() => {
+    if (menu) navigation.current?.querySelector<HTMLButtonElement>('[aria-current]')?.focus()
+  }, [menu])
   function navigate(next: View) {
     setView(next)
     setMenu(false)
@@ -167,10 +168,27 @@ function Workspace({
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      <aside className={`sidebar ${menu ? 'is-open' : ''}`}>
+      <aside
+        className={`sidebar ${menu ? 'is-open' : ''}`}
+        onKeyDown={(event) => {
+          if (menu && event.key === 'Escape') {
+            setMenu(false)
+            menuButton.current?.focus()
+          }
+        }}
+        onBlur={(event) => {
+          if (
+            menu &&
+            event.relatedTarget &&
+            event.relatedTarget !== menuButton.current &&
+            !event.currentTarget.contains(event.relatedTarget)
+          )
+            setMenu(false)
+        }}
+      >
         <Brand />
         <div className="workspace-label">Personal workspace</div>
-        <nav aria-label="Main navigation">
+        <nav id="workspace-navigation" ref={navigation} aria-label="Main navigation">
           {nav.map((item) => (
             <button
               key={item.view}
@@ -205,14 +223,20 @@ function Workspace({
           <div className="flex items-center gap-3">
             <button
               className="icon-button mobile-menu"
+              ref={menuButton}
               aria-label="Toggle navigation"
               aria-expanded={menu}
+              aria-controls="workspace-navigation"
               onClick={() => setMenu((m) => !m)}
             >
               <Icon name="menu" />
             </button>
             <span className="breadcrumb">
-              Workspace <span aria-hidden="true">/</span> <strong>{view}</strong>
+              <span className="breadcrumb-root">Workspace</span>
+              <span className="breadcrumb-root" aria-hidden="true">
+                /
+              </span>
+              <strong>{view}</strong>
             </span>
           </div>
           <div className="flex items-center gap-2">

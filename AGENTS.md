@@ -2,8 +2,10 @@
 
 Implement one user-authorized milestone at a time. M1 through M6 and the
 authorized M7 scope (OCR, imported image search and retrieval coverage) are
-complete and tested. The authorized local storage indexing milestone is also
-complete and tested. React Bits is the separate requested dashboard update.
+complete and tested. The authorized local storage indexing milestone and the
+dashboard UI refinement are complete and tested. React Bits is the separate
+requested dashboard update.
+Source checkout setup is complete and verified end to end on Windows.
 Webpage capture and packaging remain unstarted.
 Update this status after each milestone.
 Run its tests, fix failures, update docs/PROGRESS.md,

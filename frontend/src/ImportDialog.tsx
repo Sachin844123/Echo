@@ -94,7 +94,7 @@ export function ImportDialog({
                 changed(
                   result.duplicate
                     ? 'This note is already in your library.'
-                    : 'Note added. Follow its progress in Sources.',
+                    : 'Note added. Follow its progress in Activity.',
                 )
                 close()
               } else {

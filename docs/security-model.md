@@ -59,13 +59,15 @@ The dashboard opens directly for people using the running local browser.
   no inline scripts/styles, no framing, no referrers and disabled camera,
   microphone and geolocation permissions. Framework parameter validation is
   redacted instead of echoing user-supplied values.
-- The dashboard keeps its credential and document/query state in tab memory.
-  Reloading opens a fresh dashboard connection. Only a versioned theme
-  preference persists. Previews render text instead of imported HTML.
-  There is no service worker or browser-side content/history cache.
+- The dashboard keeps its credential and document state in tab memory.
+  Reloading opens a fresh dashboard connection. Previews render text.
+  The browser stores a versioned theme preference. When the user enables
+  recent searches, it also stores up to 12 submitted queries, search modes,
+  and timestamps in browser-local storage. Turning the feature off removes
+  the history key. History can be cleared independently of the library.
 - Structured logs use a field/event allowlist. Content, queries, URLs, paths,
   tokens, headers, SQL parameters, exception messages and tracebacks are
-  excluded. There are no content-bearing access logs or search history.
+  excluded. The server keeps no search history.
 - No outbound runtime HTTP, AI calls or telemetry integration. Dependency
   installation is a separate setup operation. Tests deny external socket
   connections in-process and exercise a real local HTTP server.

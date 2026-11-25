@@ -3,9 +3,10 @@ import { Api, errorText, useGet } from './api'
 import { Brand, ErrorBox, Icon, Loading } from './components'
 import { SearchPage } from './SearchPage'
 import { LibraryPage, CollectionsPage } from './LibraryPage'
-import { SourcesPage, SettingsPage } from './SystemPages'
+import { ActivityPage, SettingsPage } from './SystemPages'
 import { ImportDialog } from './ImportDialog'
 import { StorageConsent, StoragePage } from './StoragePage'
+import { useSearchHistory } from './searchHistory'
 import type { StorageStatus } from './StoragePage'
 import type { AppSettings, IndexStatus, View } from './types'
 
@@ -13,7 +14,7 @@ const nav: { view: View; icon: string }[] = [
   { view: 'Search', icon: 'search' },
   { view: 'Library', icon: 'library' },
   { view: 'Collections', icon: 'folder' },
-  { view: 'Sources', icon: 'sources' },
+  { view: 'Activity', icon: 'activity' },
   { view: 'Storage', icon: 'storage' },
   { view: 'Settings', icon: 'settings' },
 ]
@@ -101,6 +102,7 @@ function Workspace({
   const heading = useRef<HTMLHeadingElement>(null)
   const navigation = useRef<HTMLElement>(null)
   const menuButton = useRef<HTMLButtonElement>(null)
+  const history = useSearchHistory()
   const settings = useGet<AppSettings>(api, '/api/v1/settings', revision)
   const refresh = useCallback(() => setRevision((r) => r + 1), [])
   const changed = useCallback(
@@ -258,37 +260,30 @@ function Workspace({
           </div>
         </header>
         <main id="main-content" className="main-content" tabIndex={-1}>
-          <header className="page-heading">
-            <div>
-              <h1 ref={heading} tabIndex={-1}>
-                {view === 'Search'
-                  ? 'Find it again.'
-                  : view === 'Library'
+          {view !== 'Search' ? (
+            <header className="page-heading">
+              <div>
+                <h1 ref={heading} tabIndex={-1}>
+                  {view === 'Library'
                     ? 'Your library'
                     : view === 'Storage'
                       ? 'Storage & Permissions'
                       : view}
-              </h1>
-              <p>
-                {
+                </h1>
+                <p>
                   {
-                    Search: 'Search your imports and files in approved folders.',
-                    Library: 'Your documents and notes, together in one place.',
-                    Collections: 'Keep related reading together.',
-                    Sources: 'Follow each import from capture to searchable content.',
-                    Storage: 'Choose what ECHO can read and manage automatic indexing.',
-                    Settings: 'Your workspace, your device, your controls.',
-                  }[view]
-                }
-              </p>
-            </div>
-            {view === 'Search' ? (
-              <span className="shortcut">
-                <kbd>Ctrl</kbd>
-                <kbd>K</kbd> to search
-              </span>
-            ) : null}
-          </header>
+                    {
+                      Library: 'Your documents and notes, together in one place.',
+                      Collections: 'Keep related reading together.',
+                      Activity: 'Follow each import from capture to searchable content.',
+                      Storage: 'Choose what ECHO can read and manage automatic indexing.',
+                      Settings: 'Your workspace, your device, your controls.',
+                    }[view]
+                  }
+                </p>
+              </div>
+            </header>
+          ) : null}
           {notice ? (
             <div className="notice" role="status">
               <Icon name="check" />
@@ -311,11 +306,14 @@ function Workspace({
           ) : null}
           {view === 'Search' ? (
             <SearchPage
+              headingRef={heading}
               api={api}
               revision={revision}
               status={status}
+              history={history}
               changed={changed}
               openImport={() => setImporting(true)}
+              openActivity={() => navigate('Activity')}
             />
           ) : null}
           {view === 'Library' ? (
@@ -334,8 +332,14 @@ function Workspace({
               openImport={() => setImporting(true)}
             />
           ) : null}
-          {view === 'Sources' ? (
-            <SourcesPage api={api} revision={revision} status={status} changed={changed} />
+          {view === 'Activity' ? (
+            <ActivityPage
+              api={api}
+              revision={revision}
+              status={status}
+              changed={changed}
+              openImport={() => setImporting(true)}
+            />
           ) : null}
           {view === 'Settings' ? (
             <SettingsPage
@@ -345,6 +349,7 @@ function Workspace({
               theme={theme}
               toggleTheme={toggleTheme}
               changed={changed}
+              history={history}
               openStorage={() => navigate('Storage')}
             />
           ) : null}
@@ -362,7 +367,9 @@ function Workspace({
         <footer className="workspace-footer">
           <span>
             <Icon name="lock" size={13} />
-            No cloud sync. No search history.
+            {history.entries === null
+              ? 'Local workspace. Recent searches off.'
+              : 'Local workspace. Recent searches stay in this browser.'}
           </span>
           <span>ECHO {settings.data?.version ?? ''}</span>
         </footer>

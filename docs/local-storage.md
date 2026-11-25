@@ -20,7 +20,7 @@ in the library database. Reapprove **All Accessible Local Files** after adding
 a new fixed drive if you want ECHO to include it.
 
 The Storage page shows approved folders, stored source-copy bytes, detected and
-fully indexed file counts, pending jobs and scan errors. **Sources** provides
+fully indexed file counts, pending jobs and scan errors. **Activity** provides
 individual extraction and embedding job errors. Use **Pause** or **Cancel
 indexing** to stop scanning and scheduling new automatic work. An ingestion
 operation already in progress may finish. **Resume** and **Rescan** resume work

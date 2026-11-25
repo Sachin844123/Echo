@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Api, errorText, useCollections, useGet } from './api'
 import {
   Confirm,
@@ -31,6 +31,7 @@ export function LibraryPage({
   const [type, setType] = useState('')
   const [collection, setCollection] = useState('')
   const [selected, setSelected] = useState<number>()
+  const previewTrigger = useRef<HTMLButtonElement>(null)
   const [tick, setTick] = useState(0)
   const path = `/api/v1/sources?limit=30&offset=${offset}${type ? `&source_type=${type}` : ''}${collectionId || collection ? `&collection_id=${collectionId || collection}` : ''}`
   const sources = useGet<Page<Source>>(api, path, revision + tick)
@@ -95,7 +96,7 @@ export function LibraryPage({
       </div>
       {collections.error ? <ErrorBox message={collections.error} /> : null}
       <div className={`document-workspace ${selected ? 'has-preview' : ''}`}>
-        <section className="library-list" aria-label="Documents">
+        <section className="library-list" aria-label="Documents" aria-busy={sources.loading}>
           {sources.loading ? (
             <Loading />
           ) : sources.error ? (
@@ -119,16 +120,25 @@ export function LibraryPage({
                     key={source.id}
                     className={`library-row ${selected === source.id ? 'selected' : ''}`}
                     aria-label={`Preview ${source.title}`}
+                    aria-describedby={`library-meta-${source.id}`}
                     aria-pressed={selected === source.id}
-                    onClick={() => setSelected(source.id)}
+                    onClick={(event) => {
+                      previewTrigger.current = event.currentTarget
+                      setSelected(source.id)
+                    }}
                   >
                     <span className="document-name">
                       <span className={`file-icon type-${source.source_type}`}>
-                        <Icon name="sources" />
+                        <Icon
+                          name={source.source_type === 'image' ? 'image' : 'sources'}
+                          size={18}
+                        />
                       </span>
                       <span>
                         <strong>{source.title}</strong>
-                        <small>{sourceNames[source.source_type]}</small>
+                        <small id={`library-meta-${source.id}`}>
+                          {sourceNames[source.source_type]}
+                        </small>
                       </span>
                     </span>
                     <span className="captured-date">{dateLabel(source.captured_at)}</span>
@@ -167,7 +177,10 @@ export function LibraryPage({
             sourceId={selected}
             revision={revision}
             changed={changed}
-            close={() => setSelected(undefined)}
+            close={() => {
+              setSelected(undefined)
+              requestAnimationFrame(() => previewTrigger.current?.focus())
+            }}
           />
         ) : null}
       </div>

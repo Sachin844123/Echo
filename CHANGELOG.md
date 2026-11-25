@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — Search workspace and Activity
+
+- Add a new Search composer with collapsible filters and a live library
+  overview in both themes.
+- Add opt-in, browser-local recent searches with reuse, individual removal,
+  clear history, and a privacy toggle.
+- Bring indexing jobs forward in Activity with updated timestamps, preview
+  access, and retries.
+- Verified with 16 browser and proxy tests, the production build, and
+  accessibility and layout checks in light and dark at desktop and narrow widths.
+
 ## Unreleased — source checkout setup
 
 - Add first-run scripts for Windows, macOS, and Linux. Install the project

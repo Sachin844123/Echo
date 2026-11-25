@@ -1,6 +1,6 @@
 export type SourceType = 'pdf' | 'txt' | 'markdown' | 'docx' | 'note' | 'image'
 export type Mode = 'keyword' | 'semantic' | 'hybrid' | 'hybrid_contextual' | 'visual'
-export type View = 'Search' | 'Library' | 'Collections' | 'Sources' | 'Storage' | 'Settings'
+export type View = 'Search' | 'Library' | 'Collections' | 'Activity' | 'Storage' | 'Settings'
 export interface Source {
   id: number
   source_type: SourceType
@@ -42,6 +42,7 @@ export interface Job {
   status: string
   stage: string
   attempts: number
+  updated_at: string | null
   retryable: boolean
   error: { code: string; message: string } | null
 }

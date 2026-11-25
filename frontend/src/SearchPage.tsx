@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Api, errorText, useCollections } from './api'
-import { Empty, ErrorBox, Icon, Loading } from './components'
+import { Empty, ErrorBox, HighlightedText, Icon, Loading } from './components'
 import { PreviewPanel } from './PreviewPanel'
 import { dateLabel, modes, sourceNames } from './types'
 import type { IndexStatus, Mode, SearchHit, SearchResponse } from './types'
@@ -32,9 +32,13 @@ export function SearchPage({
   const [selected, setSelected] = useState<SearchHit>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [rerun, setRerun] = useState(0)
   const active = useRef<AbortController | null>(null)
-  const form = useRef<HTMLFormElement>(null)
+  const previewTrigger = useRef<HTMLButtonElement>(null)
+  const effectiveQuery = response?.query_analysis?.effective_query ?? submitted
+  const highlightWords = useMemo(
+    () => new Set(effectiveQuery.toLocaleLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []),
+    [effectiveQuery],
+  )
   const collections = useCollections(api, revision)
   const previousRevision = useRef(revision)
   useEffect(() => () => active.current?.abort(), [])
@@ -89,10 +93,7 @@ export function SearchPage({
         },
         controller.signal,
       )
-      if (!controller.signal.aborted) {
-        setResponse(result)
-        setRerun((r) => r + 1)
-      }
+      if (!controller.signal.aborted) setResponse(result)
     } catch (error) {
       if (!controller.signal.aborted) setError(errorText(error))
     } finally {
@@ -102,7 +103,6 @@ export function SearchPage({
   return (
     <>
       <form
-        ref={form}
         className="search-form"
         onSubmit={(e) => {
           e.preventDefault()
@@ -116,7 +116,7 @@ export function SearchPage({
           </label>
           <input
             id="memory-query"
-            placeholder="A phrase, an idea, something you read…"
+            placeholder="A phrase, an idea, a detail…"
             value={query}
             maxLength={2000}
             onChange={(e) => {
@@ -349,21 +349,25 @@ export function SearchPage({
                 </div>
               ) : null}
               {response.results.length ? (
-                <div className="result-list" key={rerun}>
+                <div className="result-list">
                   {response.results.map((hit) => (
                     <button
                       className={`result-row ${selected?.source_id === hit.source_id ? 'selected' : ''}`}
                       key={hit.source_id}
-                      onClick={() => setSelected(hit)}
+                      onClick={(event) => {
+                        previewTrigger.current = event.currentTarget
+                        setSelected(hit)
+                      }}
                       aria-label={`Preview ${hit.title}`}
+                      aria-describedby={`result-meta-${hit.source_id}`}
                       aria-pressed={selected?.source_id === hit.source_id}
                     >
                       <span className={`file-icon type-${hit.source_type}`}>
-                        <Icon name="sources" />
+                        <Icon name={hit.source_type === 'image' ? 'image' : 'sources'} size={18} />
                       </span>
                       <span className="result-body">
                         <strong>{hit.title}</strong>
-                        <span className="row-meta">
+                        <span className="row-meta" id={`result-meta-${hit.source_id}`}>
                           {sourceNames[hit.source_type]}
                           <span aria-hidden="true">·</span>
                           {dateLabel(hit.captured_at)}
@@ -373,10 +377,7 @@ export function SearchPage({
                         </span>
                         {mode !== 'visual' ? (
                           <span className="excerpt">
-                            <Highlight
-                              text={hit.excerpt}
-                              query={response.query_analysis?.effective_query ?? submitted}
-                            />
+                            <HighlightedText text={hit.excerpt} words={highlightWords} />
                           </span>
                         ) : null}
                         {hit.heading ? <span className="row-heading">{hit.heading}</span> : null}
@@ -437,24 +438,16 @@ export function SearchPage({
             api={api}
             sourceId={selected.source_id}
             hit={mode === 'visual' ? undefined : selected}
+            highlightWords={highlightWords}
             revision={revision}
             changed={changed}
-            close={() => setSelected(undefined)}
+            close={() => {
+              setSelected(undefined)
+              requestAnimationFrame(() => previewTrigger.current?.focus())
+            }}
           />
         ) : null}
       </div>
-    </>
-  )
-}
-function Highlight({ text, query }: { text: string; query: string }) {
-  const words = new Set(query.toLocaleLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [])
-  return (
-    <>
-      {text
-        .split(/([\p{L}\p{N}_]+)/gu)
-        .map((piece, i) =>
-          words.has(piece.toLocaleLowerCase()) ? <mark key={i}>{piece}</mark> : piece,
-        )}
     </>
   )
 }

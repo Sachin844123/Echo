@@ -1,12 +1,70 @@
 # ECHO progress
 
-## Current state — 2026-11-24 (Asia/Calcutta)
+## Current state — 2026-11-25 (Asia/Calcutta)
 
 **M1 through M6 LOCAL API HARDENING + DASHBOARD are complete and tested.**
 **M7 OCR, imported image search and retrieval coverage are complete and tested.**
 **Opt-in local storage access and indexing are complete and tested.**
+**Dashboard UI refinement is complete and tested.**
+**Source checkout setup is complete and verified end to end on Windows.**
 Webpage capture and packaging remain unstarted. React Bits is queued as a
 separate dashboard update after M7.
+
+## Source checkout setup
+
+- Added `setup.bat` for Windows and `setup.sh` for macOS and Linux. Both call
+  `scripts/setup_echo.py` to check the runtimes, create the virtual environment,
+  install Python and npm dependencies, and build the dashboard.
+- The default prepares MiniLM, OCR language data, and CLIP, then uses the
+  existing launcher to migrate the database and open the local dashboard.
+  `--no-launch` initializes the database and exits. `--skip-models` skips
+  model provisioning.
+- A clean Windows copy with spaces in its path passed
+  `setup.bat --no-launch --skip-models`, including Python and npm
+  installation, `pip check`, the production build, and migration. Public
+  MiniLM, English OCR, and CLIP downloads were verified in the same copy.
+- The final Windows setup launched the dashboard on loopback from that copy.
+  The database health check required authentication, and the running server
+  reported text search, visual search, and OCR ready. A concurrent setup
+  attempt was rejected before package installation.
+- Bash syntax, help, and prerequisite handling were checked on Windows and
+  in Ubuntu WSL. The WSL environment lacked native Node.js, so full macOS
+  and Linux installations still need platform runs.
+
+## Dashboard UI refinement
+
+- Refined Search, Library, Collections, Sources, Storage & Permissions, and
+  Settings with shared light and dark theme tokens.
+- Improved search filters, result rows, matched passages, document previews,
+  import and permission dialogs, and loading, error, and status feedback.
+- Applied the saved theme before the first paint and improved keyboard focus
+  in narrow navigation and document previews. Motion honors reduced motion.
+- Research evaluation remains available through the existing CLI harness.
+- The visual audit uses the actual application with a disposable database
+  and labelled test data. It compares the original and refined production
+  builds at 1440 × 1000 and 375 × 812 in both themes. Full-size captures and
+  comparison sheets live under the ignored `.local/ui-refinement/` directory.
+- The final audit captured 30 before and 30 after screenshots. Axe reported
+  zero violations and the horizontal overflow check passed for all 24
+  combinations of page, viewport, and theme.
+- `npm run format:check`, `npm run typecheck`, and `npm run build` passed.
+  `npm test` returned 15 passing tests and skipped the opt-in screenshot test,
+  which passed when run separately. Browser coverage includes focus return,
+  theme before React startup, reduced motion, and landscape dialog sizing.
+  `.venv\Scripts\python.exe -m pytest -q --tb=short` returned 303 passing tests.
+- Updated the shared styles and components, workspace shell, Search, Library,
+  preview, Import, and Storage UI. Added a pre-paint script under
+  `frontend/public/assets/` and updated the isolated Playwright harness.
+- To recapture the current build in PowerShell, run the following in
+  `frontend/`.
+
+  ```powershell
+  npm run build
+  $env:ECHO_VISUAL_CAPTURE_DIR = Join-Path (Resolve-Path '..') '.local/ui-refinement/after'
+  $env:ECHO_VISUAL_VERIFY = '1'
+  npm test -- visual.spec.ts
+  Remove-Item Env:ECHO_VISUAL_CAPTURE_DIR, Env:ECHO_VISUAL_VERIFY
+  ```
 
 ## Local file access and automatic indexing
 

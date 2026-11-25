@@ -26,6 +26,8 @@
 - Coordinate setup per checkout using the existing OS-released lock helper.
   Keep installation files, models, and the library local to the checkout
   by default.
+- Run the existing browser launcher from `run.sh` on macOS and Linux.
+  Require Node.js at launch only when the dashboard needs a build.
 
 ## Dashboard UI refinement — 2026-11-25
 

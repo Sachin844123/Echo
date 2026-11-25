@@ -5,28 +5,30 @@ material. Research evaluation remains the project's primary deliverable.
 
 ## Design direction
 
-Use a compact, left-aligned file-manager layout. A persistent navigation rail
-holds Search, Library, Collections, Sources and Settings. Search uses a broad
-query field, explicit filters, a result list and a separate reading panel.
-Library uses document rows; Sources shows ingestion and indexing work.
+Use a left-aligned file-manager layout with a persistent navigation rail.
+Search opens with a pine-green composer, a filter disclosure, and panels for
+recent searches and library activity. Results retain a separate reading panel.
+Library uses document rows. Activity shows extraction and indexing work with
+status, timestamps, preview access, and retry.
 
 ```text
 Navigation      Page title                         Import documents
-                Query / filters
-                Results or library rows            Document preview
+                Search composer / filters
+                Recent searches                    Library activity
+                Results                            Document preview
 Local status    Pagination                         Source / collection actions
 ```
 
-The distinctive element is the reading panel: a quiet document surface with
-the matched passage, source metadata and collection controls together. Avoid
-chat bubbles, marketing heroes, ornamental charts, gradients, decorative
-animation and fabricated documents or statistics. Empty states offer an action.
+The composer puts the query first. The reading panel pairs the matched passage
+with source metadata and collection controls. Empty states offer an action.
+Activity and library counts use data from the running local server.
 
 ## Tokens
 
-- Canvas: `#f6f7f4`; navigation: `#eef0eb`; surface: `#ffffff`.
-- Ink: `#202a25`; secondary text: `#58645d`; accent: `#275c45`.
-- Dark canvas: `#18211d`; dark surface: `#202d26`; text: `#edf2ee`.
+- Light canvas `#f6f7f5`, navigation `#edf0ed`, and workspace surface `#ffffff`.
+- Light ink `#17251e`, secondary text `#516058`, and accent `#245942`.
+- Dark canvas `#181d1b`, workspace surface `#222a26`, and text `#edf2ef`.
+- Pine-green search composer with pale text in both themes.
 - Typography: locally available Segoe UI / system sans for navigation and
   controls; Georgia for the document reading surface only. No font downloads.
 - Spacing: 4px base; 8/12/16/24/32px steps. Controls at least 40px high;

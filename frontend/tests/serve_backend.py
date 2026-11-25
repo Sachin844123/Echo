@@ -12,11 +12,13 @@ from app.core.config import Settings
 from app.core.logging import configure_logging
 from app.database.engine import create_sqlite_engine
 from app.database.migrate import upgrade_database
-from app.main import create_app
+from app import main as server
 
 
 def main():
     configure_logging('ERROR')
+    if dashboard_root := os.environ.get('ECHO_E2E_DASHBOARD_ROOT'):
+        server.REPO_ROOT = Path(dashboard_root).resolve()
     with tempfile.TemporaryDirectory(prefix='echo-browser-TEST-DATA-') as directory:
         data = Path(directory)
         settings = Settings(data_dir=data, port=8237, session_token=os.environ['ECHO_E2E_TOKEN'],
@@ -25,7 +27,7 @@ def main():
         engine = create_sqlite_engine(settings.database_path)
         upgrade_database(engine)
         engine.dispose()
-        uvicorn.run(create_app(settings), host='127.0.0.1', port=8237, proxy_headers=False,
+        uvicorn.run(server.create_app(settings), host='127.0.0.1', port=8237, proxy_headers=False,
                     access_log=False, log_config=None, server_header=False, date_header=False, ws='none')
 
 

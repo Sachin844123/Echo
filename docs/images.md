@@ -54,7 +54,7 @@ $env:ECHO_OCR_LANGUAGES = 'eng+hin'
 
 Open an existing PDF or image in **Library** and choose **Reprocess** to apply
 OCR settings to its stored copy. Reprocessing removes the source from search
-until extraction finishes. **Sources** shows separate extraction, text indexing
+until extraction finishes. **Activity** shows separate extraction, text indexing
 and visual indexing jobs. Fix a missing model or language pack before retrying.
 If OCR data is unavailable, images remain searchable by filename and visual
 description once their respective indexes are ready. PDFs keep their native

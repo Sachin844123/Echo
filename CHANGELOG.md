@@ -19,6 +19,7 @@
 - Verified on a clean Windows copy, including all three model downloads
   and the authenticated loopback launch. Checked the shell entry point in
   Git Bash and Ubuntu WSL.
+- Add `run.sh` to reopen ECHO after setup on macOS and Linux.
 
 ## Unreleased — dashboard refinement
 

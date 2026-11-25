@@ -29,7 +29,8 @@ export default defineConfig({
   webServer: {
     command: `"${python}" tests/serve_backend.py`,
     url: 'http://127.0.0.1:8237/',
-    timeout: 90000,
+    // First imports of the native indexing dependencies can be slow on Windows.
+    timeout: 240000,
     reuseExistingServer: false,
   },
 })

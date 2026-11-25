@@ -154,6 +154,7 @@ export function ImportDialog({
                   <input
                     className="file-input"
                     type="file"
+                    aria-label="Choose files"
                     multiple
                     accept=".pdf,.txt,.md,.markdown,.docx,.png,.jpg,.jpeg"
                     disabled={busy}

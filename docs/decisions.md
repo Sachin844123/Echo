@@ -1,5 +1,33 @@
 # Decisions
 
+## Source checkout setup — 2026-11-25
+
+- Use the same Python setup driver from both shell entry points and the
+  existing application launcher for migration and browser startup.
+- Use the checked-in Python constraints and npm lockfile. Python, SQLite
+  FTS5, Node.js, and npm are prerequisites supplied by the user's system.
+- Compile Python modules on demand. The initial Windows install spent
+  substantial time generating bytecode for installed dependencies.
+- Download pinned assets through the existing model preparation utilities.
+  Verify existing model assets and preserve them on reruns.
+- Coordinate setup per checkout using the existing OS-released lock helper.
+  Keep installation files, models, and the library local to the checkout
+  by default.
+
+## Dashboard UI refinement — 2026-11-25
+
+- Keep the workspace shell, green accent, system typography, and React/Tailwind
+  stack. Separate canvas, navigation, and elevated surfaces with shared tokens.
+  Use a small number of short CSS transitions for interaction feedback.
+- Apply the saved theme from a same-origin script before the first paint.
+  Reuse the existing theme preference key and startup security policy.
+- Retain the search result order and relevance semantics from the API. Show
+  matching query terms and the existing document passage as supporting evidence.
+- Capture the isolated Playwright workspace with labelled test data. Store
+  screenshots in ignored local storage.
+- Allow four minutes for the Playwright server to become ready on Windows.
+  A cold native dependency import exceeded the previous 90-second allowance.
+
 ## Local file access and automatic indexing
 
 - Require an explicit persisted permission choice. On Windows, discover fixed

@@ -294,7 +294,9 @@ test('processing errors, explicit semantic failure, context controls and retry r
     'TEST DATA Missing model does not hide keyword text.',
   )
   await waitForText(page)
-  await navigate(page, 'Sources')
+  await page.getByRole('button', { name: 'View activity' }).click()
+  await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeVisible()
+  await expect(page.locator('.job-details time').first()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Retry job', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Retry job', exact: true }).click()
   await expect(page.getByText('Processing retry queued.', { exact: true })).toBeVisible()
@@ -340,6 +342,12 @@ test('keyboard navigation, modal focus, themes, responsive layout and accessibil
   await openWorkspace(page)
   await page.keyboard.press('Control+k')
   await expect(page.getByRole('textbox', { name: 'What do you remember?' })).toBeFocused()
+  const filters = page.getByRole('button', { name: 'Filters', exact: true })
+  await filters.click()
+  await expect(filters).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByLabel('File type')).not.toBeVisible()
+  await filters.click()
+  await expect(page.getByLabel('File type')).toBeVisible()
   expect(await violations()).toEqual([])
   await page.screenshot({ path: 'test-results/dashboard-light.png', fullPage: true })
   await page.getByRole('button', { name: 'Import', exact: true }).click()
@@ -390,6 +398,56 @@ test('a stored theme is applied before React starts', async ({ page }) => {
   await expect(page.locator('#root')).toBeEmpty()
 })
 
+test('recent searches require opt-in and can be reused, removed, and cleared', async ({ page }) => {
+  const key = 'echo.recent-searches.v1'
+  await openWorkspace(page)
+  const input = page.getByRole('textbox', { name: 'What do you remember?' })
+  const recent = page.getByRole('region', { name: 'Recent searches' })
+  const search = page.getByRole('main').getByRole('button', { name: 'Search', exact: true })
+  await page.getByRole('button', { name: 'Keywords', exact: true }).click()
+  await input.fill('TEST DATA private query')
+  await search.click()
+  await expect(page.getByRole('heading', { name: 'No matching documents' })).toBeVisible()
+  expect(await page.evaluate((storageKey) => localStorage.getItem(storageKey), key)).toBeNull()
+  await page.getByRole('button', { name: 'Recent', exact: true }).click()
+  await recent.getByRole('button', { name: 'Enable recent searches' }).click()
+  await expect(recent).toContainText('Run a search to add it here.')
+  await input.fill('TEST DATA cedar notebook')
+  await search.click()
+  await expect(page.getByRole('heading', { name: 'No matching documents' })).toBeVisible()
+  await search.click()
+  await expect(page.getByRole('heading', { name: 'No matching documents' })).toBeVisible()
+  await page.reload()
+  const saved = recent.getByRole('button', { name: /^TEST DATA cedar notebook/ })
+  await expect(saved).toHaveCount(1)
+  await saved.click()
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue('TEST DATA cedar notebook')
+  await expect(page.getByRole('button', { name: 'Keywords', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await recent.getByRole('button', { name: 'Remove search: TEST DATA cedar notebook' }).click()
+  await expect(saved).toHaveCount(0)
+  await expect(recent.getByRole('heading')).toBeFocused()
+  await search.click()
+  await expect(page.getByRole('heading', { name: 'No matching documents' })).toBeVisible()
+  await navigate(page, 'Settings')
+  await page.getByRole('button', { name: 'Clear history', exact: true }).click()
+  await expect(page.getByRole('checkbox', { name: 'Remember recent searches' })).toBeChecked()
+  expect(await page.evaluate((storageKey) => localStorage.getItem(storageKey), key)).toBe('[]')
+  await navigate(page, 'Search')
+  await page.getByRole('button', { name: 'Keywords', exact: true }).click()
+  await input.fill('TEST DATA maple notebook')
+  await search.click()
+  await expect(page.getByRole('heading', { name: 'No matching documents' })).toBeVisible()
+  await navigate(page, 'Settings')
+  await page.getByRole('checkbox', { name: 'Remember recent searches' }).uncheck()
+  expect(await page.evaluate((storageKey) => localStorage.getItem(storageKey), key)).toBeNull()
+  await navigate(page, 'Search')
+  await expect(recent.getByRole('button', { name: 'Enable recent searches' })).toBeVisible()
+})
+
 test('queries are not persisted and stale search responses cannot overwrite newer input', async ({
   page,
 }) => {
@@ -409,9 +467,7 @@ test('queries are not persisted and stale search responses cannot overwrite newe
   await expect(page.getByRole('status').filter({ hasText: 'Searching your library' })).toBeVisible()
   await query.fill('new query')
   release()
-  await expect(
-    page.getByRole('heading', { name: 'Your memory is the starting point.' }),
-  ).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Recent searches' })).toBeVisible()
   expect(page.url()).not.toContain('PRIVATE')
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain(
     'PRIVATE',

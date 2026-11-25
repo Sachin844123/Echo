@@ -48,6 +48,10 @@ separate dashboard update after M7.
 - Bash syntax, help, and prerequisite handling were checked on Windows and
   in Ubuntu WSL. The WSL environment lacked native Node.js, so full macOS
   and Linux installations still need platform runs.
+- Added `bash run.sh` to reopen ECHO on macOS and Linux. Git Bash checks
+  passed for first build, reuse of an existing build, explicit rebuild,
+  invalid arguments, missing setup, and build failure. The checks used
+  disposable shell fixtures. Launch on a native Mac remains unverified.
 
 ## Dashboard UI refinement
 

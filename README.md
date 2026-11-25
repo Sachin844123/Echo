@@ -28,7 +28,7 @@ your browser without sign-in. See [Quick start](#quick-start) for macOS and Linu
 
 | Available now | Planned / Optional |
 |---|---|
-| Local React dashboard — Search, Library, Collections, Sources, Settings | Research findings from user-supplied labelled data |
+| Local React dashboard — Search, Library, Collections, Activity, Storage, Settings | Research findings from user-supplied labelled data |
 | Validated imports, previews and recoverable indexing pipeline | React Bits dashboard update |
 | Keyword, semantic, hybrid and contextual-hybrid retrieval | Webpage capture and packaging require separate authorization |
 | OCR for scanned PDFs and PNG/JPEG, plus visual image search | |
@@ -248,7 +248,7 @@ Each command downloads public assets once. Search and OCR run offline afterward.
 
 The setup scripts store assets under `.local/models/` and preserve existing
 model directories. Restart ECHO after setup. **Keywords** can search native text
-without MiniLM. Use **Sources** to retry failed indexing jobs after installing
+without MiniLM. Use **Activity** to retry failed indexing jobs after installing
 a model, or choose **Reprocess** on an imported scan to apply OCR. See
 [model recovery](docs/search.md) and the [OCR and image guide](docs/images.md).
 

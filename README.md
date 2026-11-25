@@ -213,17 +213,18 @@ the script builds the dashboard if needed, then initializes or migrates the
 database and opens [ECHO on loopback](http://127.0.0.1:8000/). The launcher
 prints the address if you use a different port.
 
-On macOS or Linux, run the following from the repository root after setup:
+On macOS or Linux, run [`run.sh`](run.sh) from the repository root after setup.
+It opens the same local dashboard and builds it if needed.
 
 ```sh
-cd backend
-../.venv/bin/python -m app launch
+bash run.sh
 ```
 
 The workspace opens directly. On the first visit, choose a storage access level
 or deny access to use manual imports only. Keep the launcher window open while using ECHO
 and press **Ctrl+C** there to stop it. After frontend edits, run
-`.\Run-ECHO.bat --build` to rebuild the dashboard. See the
+`.\Run-ECHO.bat --build` on Windows or `bash run.sh --build` on macOS and
+Linux to rebuild the dashboard. See the
 [dashboard guide](frontend/README.md) for a manual build or Vite development setup.
 
 > [!CAUTION]
@@ -602,6 +603,7 @@ separate vector database servers.
 setup.bat             First-run setup on Windows
 setup.sh              First-run setup on macOS and Linux
 Run-ECHO.bat          Windows launcher for the local dashboard
+run.sh                macOS and Linux launcher for the local dashboard
 backend/
   app/
     api/              Local HTTP endpoints

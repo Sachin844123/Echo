@@ -32,19 +32,24 @@ Keywords remain available when the local model is absent.
 
 ## Screens and behavior
 
-- **Search:** all four retrieval modes; type, collection and inclusive local-day
-  date filters. Context mode adds separate optional soft hints. Queries stay in
-  memory. Ctrl/Cmd+K focuses search; changes cancel stale requests.
+- **Search:** four text retrieval modes plus visual search. Type, collection,
+  and date filters start collapsed on narrow displays. Context mode has
+  separate optional ranking hints. Ctrl/Cmd+K focuses search.
+- **Recent searches:** opt in from Search or Settings. The browser keeps up
+  to 12 completed queries, their modes, and timestamps. Selecting an entry
+  fills in its query and mode. The search runs when you submit it. You can
+  remove entries individually, clear history, or turn it off.
 - **Library:** paginated sources, type/collection filters, rename and deletion.
   Preview shows bounded extracted text, the matched passage, source references
   and collection membership. It renders text, never imported HTML or Markdown.
 - **Collections:** create, browse and delete; deleting a collection keeps its
   documents. Add/remove documents through their preview.
-- **Sources:** extraction/indexing activity, explicit failures and eligible
+- **Activity:** extraction and indexing jobs with timestamps, explicit failures and eligible
   retries. Counts come from the local API, never fabricated sample data.
-- **Settings:** theme, read-only server configuration and confirmed
-  delete-all. Search history remains off. Only `echo.theme.v1` persists in browser
-  storage; tokens, queries, titles and document content do not.
+- **Settings:** theme, opt-in browser history, read-only server configuration,
+  and confirmed delete-all. Themes persist in `echo.theme.v1`. Recent searches
+  use `echo.recent-searches.v1` while enabled. Tokens and documents stay in
+  tab memory.
 
 Imports accept PDF, TXT, Markdown, DOCX, PNG, JPEG and manual notes. Files upload sequentially
 with per-file results and duplicates reported. Each file has the server's size

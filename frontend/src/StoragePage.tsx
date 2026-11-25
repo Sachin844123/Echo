@@ -290,7 +290,7 @@ export function StoragePage({
             Review permission
           </button>
         </div>
-        <p>
+        <p className="storage-mode">
           {modes.find((item) => item.value === status.mode)?.title ??
             'Permission has not been set.'}
         </p>
@@ -324,7 +324,7 @@ export function StoragePage({
       <section className="settings-section">
         <div className="section-bar">
           <h2>Automatic indexing</h2>
-          <span role="status">
+          <span className="plain-badge" role="status">
             {enabled
               ? status.phase === 'scanning'
                 ? 'Scanning'
